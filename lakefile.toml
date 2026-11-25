@@ -1,0 +1,15 @@
+name = "p_vs_np"
+defaultTargets = ["PvsNP"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.35.0"
+
+[[require]]
+name = "np-complete"
+git = "https://github.com/starpos/lean-np-complete.git"
+rev = "3817bf9a8292062863a24110cf648ae6c05a3429"
+
+[[lean_lib]]
+name = "PvsNP"
