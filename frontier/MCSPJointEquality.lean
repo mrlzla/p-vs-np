@@ -192,10 +192,24 @@ private theorem control_accepts_diagonal (hm : r+4 ≤ r+(s+1)) (h15 : 15 ≤ r+
     rwa [hid] at h
   simp [control, diagonal, hBlock]
 
+theorem diagonal_certificate_cost (hm : r+4 ≤ r+(s+1)) (h15 : 15 ≤ r+(s+1))
+    (U : Labels r s) : complexity interpretation (single
+      ((MCSP.truthTable ((r+(s+1))+1)).symm (diagonal U))) ≤ 10*2^r+18*(r+(s+1))+40 := by
+  have hEmpty := control_accepts_diagonal hm h15 U ∅ (by simp)
+  have he : patch ∅ (diagonal U) = diagonal U := by funext i; simp [patch]
+  rw [he] at hEmpty
+  exact control_certificate_cost hm hEmpty
+
+private theorem doubled_correction_budget (M : ℕ) (hm : 1024 ≤ M) :
+    (M+9)*(M+2)+58*M+90 ≤ 2*M^2 := by
+  have h := Nat.mul_le_mul_right M (show 70 ≤ M by omega)
+  rw [← pow_two] at h
+  nlinarith only [h, hm]
+
 /-- The same selector works for both disjoint blocks, even with independent
-affine tags and up to 36 arbitrary flips of the combined table. -/
+affine tags and a correction budget growing with the suffix length. -/
 theorem exists_selectorAt (r t radius : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1)
-    (hRadius : radius ≤ 36) :
+    (hRadius : 2*radius ≤ t+9) :
     ∃ h : BooleanFunction (t+1), TestsAt (r := r) radius h := by
   let m := r+(t+2)
   let p := 2*(2^r+(t+2))
@@ -219,7 +233,13 @@ theorem exists_selectorAt (r t radius : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1)
       simpa using Nat.pow_le_pow_right (by omega : 0 < t) (by decide : 1 ≤ 3)
     have hPoly : p+p+((m+1)+1)*radius+descriptionBitBound (m+1) ≤ 950*t^3 := by
       have hWidth : r ≤ t+1 := Nat.lt_two_pow_self.le.trans ht
-      have hExtra := Nat.mul_le_mul_left ((m+1)+1) hRadius
+      have hM : (m+1)+1 ≤ 3*t := by dsimp [m]; omega
+      have hR : radius ≤ 2*t := by omega
+      have hP : t^2 ≤ t^3 := Nat.pow_le_pow_right (by omega) (by decide)
+      have hExtra : ((m+1)+1)*radius ≤ 6*t^3 := calc
+        _ ≤ (3*t)*(2*t) := Nat.mul_le_mul hM hR
+        _ = 6*t^2 := by ring
+        _ ≤ _ := Nat.mul_le_mul_left _ hP
       dsimp [p, m] at hExtra ⊢
       change 2^r+2^r+(((r+(t+2))+1)+1)*4+descriptionBitBound ((r+(t+2))+1) ≤ _ at hWide
       omega
@@ -234,19 +254,24 @@ theorem exists_selectorAt (r t radius : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1)
     have hDiag : mixed h U U = diagonal U := by rw [mixed_eq_splice, splice_self]
     rw [hDiag]
     let F := (MCSP.truthTable (m+1)).symm (diagonal U)
-    have hDiagCost : complexity interpretation (single F) ≤ 10*2^r+18*m+40 := by
-      have hEmpty := control_accepts_diagonal hm hm15 U ∅ (by simp)
-      have he : patch ∅ (diagonal U) = diagonal U := by funext i; simp [patch]
-      rw [he] at hEmpty
-      exact control_certificate_cost hm hEmpty
+    have hDiagCost : complexity interpretation (single F) ≤ 10*2^r+18*m+40 :=
+      diagonal_certificate_cost hm hm15 U
     have hBase : MCSP.truthTable (m+1) F = diagonal U := Equiv.apply_symm_apply _ _
     rw [← hBase, mcspSquare, GapMCSP.slice_yesSet_eq_true_iff]
     have hCost := JuntaRadius.patched_function_cost_count F D hDiagCost
-    have hMul := Nat.mul_le_mul_right ((m+1)+2) (hD.trans hRadius)
     have hBigM : 1024 ≤ m := by dsimp [m]; omega
-    have hEnough := Nat.mul_le_mul_right (m+1) (by omega : 70 ≤ m+1)
-    rw [← pow_two] at hEnough
-    exact hCost.trans (by omega)
+    have hD' : 2*D.card ≤ (m+1)+9 := by
+      have h := Nat.mul_le_mul_left 2 hD
+      dsimp [m]
+      omega
+    have hCount : 2*(D.card*((m+1)+2)) ≤ ((m+1)+9)*((m+1)+2) := by
+      rw [← Nat.mul_assoc]
+      exact Nat.mul_le_mul_right _ hD'
+    have hEnough : ((m+1)+9)*((m+1)+2)+58*(m+1)+90 ≤ 2*(m+1)^2 := by
+      exact doubled_correction_budget (m+1) (by omega)
+    have hDouble : 2*(10*2^r+18*m+40+(m+1)+D.card*((m+1)+2)+5) ≤
+        ((m+1)+9)*((m+1)+2)+58*(m+1)+90 := by omega
+    exact hCost.trans ((Nat.mul_le_mul_left_iff (by decide : 0 < 2)).mp (hDouble.trans hEnough))
   · intro U V hne
     obtain ⟨b, hb⟩ : ∃ b, U b ≠ V b := by
       by_contra! h
@@ -260,7 +285,7 @@ theorem exists_selectorAt (r t radius : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1)
 
 theorem exists_selector (r t : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1) :
     ∃ h : BooleanFunction (t+1), Tests (r := r) h :=
-  exists_selectorAt r t 4 hr ht (by decide)
+  exists_selectorAt r t 4 hr ht (by omega)
 
 theorem control_passes (hm : r+4 ≤ r+(s+1)) (hr : 10 ≤ r) (h2 : 2^r ≤ r+(s+1))
     {h : BooleanFunction s} (hh : Tests (r := r) h) (U V : Labels r s)

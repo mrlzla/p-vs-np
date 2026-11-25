@@ -14,22 +14,22 @@ open JointEquality JointOrbit PatchedCut DegreeSampler PolynomialBarrier
 open QuadraticForest
 open scoped Classical
 
-variable {m k : ℕ}
+variable {m k f : ℕ}
 
-/-- Select k coordinates and leave five free. A positive AND sets every
+/-- Select k coordinates and leave the other coordinates free. A positive AND sets every
 literal to true. Allowing any signs costs no extra work in the control. -/
-def longAnd (e : Fin k ⊕ Fin 5 ≃ Fin m) (a : BitString k) : BooleanFunction m :=
+def longAnd (e : Fin k ⊕ Fin f ≃ Fin m) (a : BitString k) : BooleanFunction m :=
   fun z => pointFn k a (fun i => z (e (.inl i)))
 
-theorem longAnd_cost (e : Fin k ⊕ Fin 5 ≃ Fin m) (a : BitString k) :
+theorem longAnd_cost (e : Fin k ⊕ Fin f ≃ Fin m) (a : BitString k) :
     complexity interpretation (single (longAnd e a)) ≤ 2*k+1 :=
   (Boolean.synthesis_minterm (fun i => e (.inl i)) a).complexity_le
 
-theorem longAnd_degree (e : Fin k ⊕ Fin 5 ≃ Fin m) (a : BitString k) {d : ℕ} (hd : d < k) :
+theorem longAnd_degree (e : Fin k ⊕ Fin f ≃ Fin m) (a : BitString k) {d : ℕ} (hd : d < k) :
     isDegFn d m (longAnd e a) = false := by
   apply Bool.eq_false_of_not_eq_true
   intro h
-  let lift (z : BitString k) (i : Fin m) : Bool := Sum.elim z (zeroVec 5) (e.symm i)
+  let lift (z : BitString k) (i : Fin m) : Bool := Sum.elim z (zeroVec f) (e.symm i)
   have hL : IsAffineMap lift := by
     intro i
     cases hi : e.symm i with
@@ -48,27 +48,27 @@ theorem longAnd_degree (e : Fin k ⊕ Fin 5 ≃ Fin m) (a : BitString k) {d : �
   rw [he, isDegFn_pointFn_false hd a] at hComp
   cases hComp
 
-noncomputable def support (e : Fin k ⊕ Fin 5 ≃ Fin m) (a : BitString k) : Finset (Fin (2^m)) :=
+noncomputable def support (e : Fin k ⊕ Fin f ≃ Fin m) (a : BitString k) : Finset (Fin (2^m)) :=
   Finset.univ.filter (fun i => longAnd e a ((BitString.equivFin m).symm i) = true)
 
-theorem support_card (e : Fin k ⊕ Fin 5 ≃ Fin m) (a : BitString k) :
-    (support e a).card = 32 := by
-  let pack (y : BitString 5) (i : Fin m) : Bool := Sum.elim a y (e.symm i)
-  let f (y : BitString 5) := BitString.equivFin m (pack y)
-  have hI : Function.Injective f := by
+theorem support_card_pow (e : Fin k ⊕ Fin f ≃ Fin m) (a : BitString k) :
+    (support e a).card = 2^f := by
+  let pack (y : BitString f) (i : Fin m) : Bool := Sum.elim a y (e.symm i)
+  let index (y : BitString f) := BitString.equivFin m (pack y)
+  have hI : Function.Injective index := by
     intro y z h
     have h' := (BitString.equivFin m).injective h
     funext i
     have hh := congrFun h' (e (.inr i))
     simpa [pack] using hh
-  have he : support e a = Finset.univ.image f := by
+  have he : support e a = Finset.univ.image index := by
     ext i
     simp only [support, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_image]
     constructor
     · intro hi
       let z := (BitString.equivFin m).symm i
       have hFix : (fun j => z (e (.inl j))) = a := of_decide_eq_true hi
-      let y (j : Fin 5) := z (e (.inr j))
+      let y (j : Fin f) := z (e (.inr j))
       have hx : pack y = z := by
         funext j
         obtain ⟨j, rfl⟩ := e.surjective j
@@ -76,11 +76,10 @@ theorem support_card (e : Fin k ⊕ Fin 5 ≃ Fin m) (a : BitString k) :
         | inl j =>
           simpa [pack] using (congrFun hFix j).symm
         | inr j => simp [pack, y]
-      exact ⟨y, by simp [f, hx, z]⟩
+      exact ⟨y, by simp [index, hx, z]⟩
     · rintro ⟨y, rfl⟩
-      simp [longAnd, pointFn, f, pack]
+      simp [longAnd, pointFn, index, pack]
   rw [he, Finset.card_image_of_injective _ hI, Finset.card_univ, BitString.card]
-  rfl
 
 private theorem low_weight {d m : ℕ} {z : BitString m} (hz : z ∈ sample d m) :
     InvariantControl.weight z ≤ d := by
@@ -106,7 +105,7 @@ private theorem low_weight {d m : ℕ} {z : BitString m} (hz : z ∈ sample d m)
         exact Nat.add_le_add_right h' 1
 
 /-- Every sample of weight at most d misses a positive AND of length > d. -/
-theorem longAnd_invisible (e : Fin k ⊕ Fin 5 ≃ Fin m) {d : ℕ} (hd : d < k)
+theorem longAnd_invisible (e : Fin k ⊕ Fin f ≃ Fin m) {d : ℕ} (hd : d < k)
     {z : BitString m} (hz : z ∈ sample d m) :
     longAnd e (fun _ => true) z = false := by
   apply Bool.eq_false_of_not_eq_true
@@ -119,6 +118,10 @@ theorem longAnd_invisible (e : Fin k ⊕ Fin 5 ≃ Fin m) {d : ℕ} (hd : d < k)
       (fun _ _ _ _ he => Sum.inl.inj (e.injective he))
     simpa only [InvariantControl.weight, Finset.card_univ, Fintype.card_fin] using h
   exact (not_le_of_gt hd) (hCnt.trans (low_weight hz))
+
+
+theorem support_card (e : Fin k ⊕ Fin 5 ≃ Fin m) (a : BitString k) :
+    (support e a).card = 32 := support_card_pow e a
 
 private theorem schedule_long (r : ℕ) (hr : 10 ≤ r) : r+1 < logArity r-5 := by
   have h : 1024 ≤ 2^r := Nat.pow_le_pow_right (by decide : 0 < (2 : ℕ)) hr
@@ -155,7 +158,9 @@ theorem selector36 (r : ℕ) (hr : 10 ≤ r) :
   let t := 2^r-1
   have ht : t+1 = 2^r := by dsimp [t]; have := Nat.two_pow_pos r; omega
   rw [← ht]
-  exact exists_selectorAt r t 36 hr ht.ge le_rfl
+  have hBig : 1024 ≤ t+1 :=
+    (Nat.pow_le_pow_right (by decide : 0 < (2 : ℕ)) hr).trans ht.ge
+  exact exists_selectorAt r t 36 hr ht.ge (by omega)
 
 noncomputable def control36 (r : ℕ) (hr : 10 ≤ r) : BooleanFunction (2^logArity r) :=
   controlAt (r := r) (s := 2^r) 36 (schedule_centersAt r hr (by decide : 36 ≤ 40)).choose

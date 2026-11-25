@@ -111,7 +111,7 @@ private theorem degree_diagonal (hr : 1 ≤ r) (U : Labels r s) :
   rw [hDiff]
   exact isDegFn_xor (hg false) (hg true)
 
-private theorem view_rotated (j : Fin (m+1)) (T : BitString (2 ^ (m+1))) :
+theorem view_rotated (j : Fin (m+1)) (T : BitString (2 ^ (m+1))) :
     JuntaRadius.viewed _ (rotated j T) =
       fun z => JuntaRadius.viewed _ T (z ∘ blockSwap j) := by
   funext z
@@ -179,7 +179,7 @@ theorem fit_rotated (j : Fin (Arity r s)) (U : Labels r s) :
 def predicted (d : ℕ) (a : BitString m) (T : BitString (2^m)) : BooleanFunction m :=
   fun z => extend d m (fun y => JuntaRadius.viewed m T (bitXor y a)) (bitXor z a)
 
-private theorem xor_affine (a : BitString m) : IsAffineMap (fun z => bitXor z a) :=
+theorem xor_affine (a : BitString m) : IsAffineMap (fun z => bitXor z a) :=
   fun i => isDegFn_xor (isDegFn_one_coord m i) (isDegFn_const 1 m (a i))
 
 theorem degree_predicted (d : ℕ) (a : BitString m) (T : BitString (2^m)) :
@@ -384,7 +384,7 @@ private theorem synth_fit (w : BitString (Arity r s) → BooleanFunction n) (hw 
   rw [← hFn]
   exact hOut.mono Set.Subset.rfl Set.Subset.rfl (by omega)
 
-private theorem synth_belongs (w : BitString (Arity r s) → BooleanFunction n)
+theorem synth_belongs (w : BitString (Arity r s) → BooleanFunction n)
     (hw : ∀ z, w z ∈ S) :
     Synthesis interpretation S {fun T => belongs (r := r) (s := s) (fun z => w z T)}
       (Arity r s * ((sample (r+1) (Arity r s)).card * (8*s+19) + 2) + 1) := by
@@ -410,7 +410,7 @@ private theorem synth_belongs (w : BitString (Arity r s) → BooleanFunction n)
       simp [ok, eqTest, belongs, B])
   simpa only [Finset.sum_const, smul_eq_mul, Finset.card_univ, Fintype.card_fin, Nat.add_assoc] using hOut
 
-private theorem synth_distance {m : ℕ} (radius : ℕ) (w : BitString m → BooleanFunction (2^m))
+theorem synth_distance {m : ℕ} (radius : ℕ) (w : BitString m → BooleanFunction (2^m))
     {S : Set (BooleanFunction (2^m))} (hin : inputs (2^m) ⊆ S) (hw : ∀ z, w z ∈ S) :
     Synthesis interpretation S
       {fun T => decide (JuntaRadius.distance (JuntaRadius.viewed m T) (fun z => w z T) ≤ radius)}
@@ -482,7 +482,7 @@ section Schedule
 
 abbrev logArity (r : ℕ) := Arity r (2^r)
 
-private theorem schedule_margin (r : ℕ) (hr : 10 ≤ r) : 4*(r+3)^2 ≤ 2^r := by
+theorem schedule_margin (r : ℕ) (hr : 10 ≤ r) : 4*(r+3)^2 ≤ 2^r := by
   induction r, hr using Nat.le_induction with
   | base => decide
   | succ r hr ih =>
@@ -493,7 +493,7 @@ private theorem schedule_margin (r : ℕ) (hr : 10 ≤ r) : 4*(r+3)^2 ≤ 2^r :=
       _ ≤ 2*2^r := Nat.mul_le_mul_left _ ih
       _ = 2^(r+1) := by rw [pow_succ, Nat.mul_comm]
 
-private theorem schedule_base (r : ℕ) (hr : 10 ≤ r) : logArity r+1 ≤ 2^(r+1) := by
+theorem schedule_base (r : ℕ) (hr : 10 ≤ r) : logArity r+1 ≤ 2^(r+1) := by
   have hMargin := schedule_margin r hr
   have hPow : r+3 ≤ 4*(r+3)^2 := by nlinarith
   change r+(2^r+1)+1+1 ≤ 2^(r+1)
