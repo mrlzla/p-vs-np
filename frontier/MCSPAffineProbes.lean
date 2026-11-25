@@ -192,8 +192,12 @@ theorem control_accepts {r m : ℕ} (hm : r + 4 ≤ m) (hm' : 15 ≤ m)
   have hd : d i = b i := sample_off_support c b D a ha i hu
   simp [bitXor, hd] at hi
 
-theorem control_exact {r m : ℕ} (hm : r + 4 ≤ m) (hr : 10 ≤ r) (h2 : 2 ^ r ≤ m)
-    {T : BitString (2 ^ m)} (h : control r m hm T = true) : mcspSquare m T = true := by
+/-- An accepted table has a linear-size certificate in the represented arity
+on the logarithmic-width schedule. Keep the explicit cost for block composition. -/
+theorem control_certificate_cost {r m : ℕ} (hm : r + 4 ≤ m)
+    {T : BitString (2 ^ m)} (h : control r m hm T = true) :
+    complexity interpretation (single ((MCSP.truthTable m).symm T)) ≤
+      5 * 2 ^ r + 9 * m + 18 := by
   obtain ⟨a, ha⟩ := of_decide_eq_true h
   obtain ⟨t, ht, D, hD, he⟩ := LogPrefixControl.control_witness hm ha
   have hUn := congrArg (mask (sample a T)) he
@@ -207,11 +211,16 @@ theorem control_exact {r m : ℕ} (hm : r + 4 ≤ m) (hr : 10 ≤ r) (h2 : 2 ^ r
   have hCost : complexity interpretation (single (fun z => t.eval z ^^ dot (sample a T) z)) ≤
       5 * 2 ^ r + 4 * m + 5 :=
     (complexity_xor_le t.eval (dot (sample a T))).trans (by omega)
+  rw [hUn]
+  exact (JuntaRadius.patched_function_cost _ D hD hCost).trans (by omega)
+
+theorem control_exact {r m : ℕ} (hm : r + 4 ≤ m) (hr : 10 ≤ r) (h2 : 2 ^ r ≤ m)
+    {T : BitString (2 ^ m)} (h : control r m hm T = true) : mcspSquare m T = true := by
   have hmB : 1024 ≤ m := (Nat.pow_le_pow_right (by decide : 0 < (2 : ℕ)) hr).trans h2
   have hBig := Nat.mul_le_mul_right m (by omega : 15 ≤ m)
   rw [← pow_two] at hBig
-  rw [hUn]
-  exact JuntaRadius.patched_function_of_budget _ D hD hCost (by omega)
+  rw [mcspSquare, GapMCSP.slice_yesSet_eq_true_iff]
+  exact (control_certificate_cost hm h).trans (by omega)
 
 theorem control_sparse {r m : ℕ} (hm : r + 4 ≤ m) (hr : 10 ≤ r) (h2 : 2 ^ r ≤ m) :
     (acceptingTables (control r m hm)).card ≤ 2 ^ descriptionBitBound m := by
@@ -395,7 +404,7 @@ def TaggedTests {r s : ℕ} (h : BooleanFunction s) : Prop :=
   ∀ u v : Tagged r s, ∀ D : Finset (Fin (2 ^ (r + (s + 1)))), D.card ≤ 4 →
     (mcspSquare (r + (s + 1)) (patch D (taggedMixed h u v)) = true ↔ u = v)
 
-private theorem tagged_at {r s : ℕ} (u : Tagged r s) (x : BitString r) (v : Bool) (y : BitString s) :
+theorem tagged_at {r s : ℕ} (u : Tagged r s) (x : BitString r) (v : Bool) (y : BitString s) :
     taggedProbe u (position x v y) = (u.1 x ^^ ((u.2.1 && v) ^^ dot u.2.2 y)) := by
   unfold taggedProbe mask translate
   simp only [probe_at_position]
@@ -504,7 +513,7 @@ theorem tagged_mixed_with_aux {r s : ℕ} {u v : Tagged r (s+1)} (huv : u ≠ v)
     · apply read h g (congrArg Prod.fst he) x false _
       simpa only [tagged_at, Bool.and_false, Bool.false_xor] using hVis b hb
 
-private theorem tagged_card (r s : ℕ) : Fintype.card (Tagged r s) = 2 ^ (2 ^ r + (s+1)) := by
+theorem tagged_card (r s : ℕ) : Fintype.card (Tagged r s) = 2 ^ (2 ^ r + (s+1)) := by
   have hc : Fintype.card (BooleanFunction r) = 2 ^ 2 ^ r := by classical simp
   rw [Fintype.card_prod, Fintype.card_prod, hc, BitString.card, Fintype.card_bool, pow_add, pow_succ']
 

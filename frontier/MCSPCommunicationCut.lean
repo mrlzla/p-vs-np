@@ -319,6 +319,39 @@ theorem trace_splice_of_agree_crossing (p : Program signature n q) (owner : Wire
       have hs := hAgree source hSource
       cases h0 : owner source <;> cases h1 : owner (.gate k) <;> simp_all
 
+/-- An equality restriction forces the traces on the distinct crossing wires
+to encode the entire diagonal label. -/
+theorem crossingWires_lower_bound_of_family_equality {A : Type*} [Fintype A] {k : ℕ}
+    (hCard : Fintype.card A = 2 ^ k) (selector : BitString n)
+    (table : A → BitString n) (solve : BooleanFunction n)
+    (hEq : ∀ a b, solve (splice selector (table a) (table b)) = true ↔ a = b)
+    (c : Circuit signature n 1) (hc : c.Computes interpretation (single solve))
+    (owner : Wire n c.size → Bool) (hOwner : ∀ i, owner (.input i) = selector i) :
+    k ≤ (crossingWires c.program owner).card := by
+  classical
+  let send (a : A) (w : crossingWires c.program owner) : Bool :=
+    c.program.trace interpretation (table a) w.val
+  have hinj : Function.Injective send := by
+    intro a b hRecord
+    have hTrace := trace_splice_of_agree_crossing c.program owner selector
+      (table a) (table b) hOwner (fun w hw => congrFun hRecord ⟨w, hw⟩) (c.outputs 0)
+    have hOutput (u : A) :
+        c.program.trace interpretation (table u) (c.outputs 0) = true :=
+      (congrFun (hc (table u)) 0).trans (by simpa using (hEq u u).mpr rfl)
+    apply (hEq a b).mp
+    have hCompute := congrFun (hc (splice selector (table a) (table b))) 0
+    change c.program.trace interpretation (splice selector (table a) (table b))
+      (c.outputs 0) = solve (splice selector (table a) (table b)) at hCompute
+    rw [← hCompute, hTrace]
+    cases owner (c.outputs 0)
+    · exact hOutput b
+    · exact hOutput a
+  have hCount := Fintype.card_le_of_injective send hinj
+  rw [hCard] at hCount
+  have hPow : 2 ^ k ≤ 2 ^ (crossingWires c.program owner).card := by
+    simpa [Fintype.card_fun] using hCount
+  exact (Nat.pow_le_pow_iff_right (by decide : 1 < (2 : ℕ))).mp hPow
+
 /-- An equality restriction forces `2^r` crossing wires for every gate placement. -/
 theorem crossingWires_lower_bound_of_equality (h : BooleanFunction s)
     (solve : BitString (2 ^ (r + (s + 1))) → Bool)
@@ -328,33 +361,9 @@ theorem crossingWires_lower_bound_of_equality (h : BooleanFunction s)
     (hc : c.Computes interpretation (single solve))
     (owner : Wire (2 ^ (r + (s + 1))) c.size → Bool)
     (hOwner : ∀ i, owner (.input i) = mask r h i) :
-    2 ^ r ≤ (crossingWires c.program owner).card := by
-  classical
-  let send (f : BooleanFunction r) (w : crossingWires c.program owner) : Bool :=
-    c.program.trace interpretation (probe s f) w.val
-  have hinj : Function.Injective send := by
-    intro f g hRecord
-    have hTrace := trace_splice_of_agree_crossing c.program owner (mask r h)
-      (probe s f) (probe s g) hOwner (fun w hw => congrFun hRecord ⟨w, hw⟩) (c.outputs 0)
-    have hAccept (a : BooleanFunction r) : solve (probe s a) = true := by
-      simpa using (hEq a a).mpr rfl
-    have hOutput (a : BooleanFunction r) :
-        c.program.trace interpretation (probe s a) (c.outputs 0) = true :=
-      (congrFun (hc (probe s a)) 0).trans (hAccept a)
-    have hMixed : solve (splice (mask r h) (probe s f) (probe s g)) = true := by
-      have hCompute := congrFun (hc (splice (mask r h) (probe s f) (probe s g))) 0
-      change c.program.trace interpretation (splice (mask r h) (probe s f) (probe s g))
-        (c.outputs 0) = solve (splice (mask r h) (probe s f) (probe s g)) at hCompute
-      rw [← hCompute, hTrace]
-      cases hSide : owner (c.outputs 0)
-      · exact hOutput g
-      · exact hOutput f
-    exact (hEq f g).mp hMixed
-  have hCard := Fintype.card_le_of_injective send hinj
-  rw [card_functions] at hCard
-  have hPow : 2 ^ (2 ^ r) ≤ 2 ^ (crossingWires c.program owner).card := by
-    simpa [Fintype.card_fun] using hCard
-  exact (Nat.pow_le_pow_iff_right (by decide : 1 < (2 : ℕ))).mp hPow
+    2 ^ r ≤ (crossingWires c.program owner).card :=
+  crossingWires_lower_bound_of_family_equality (card_functions r) (mask r h)
+    (probe s) solve hEq c hc owner hOwner
 
 /-- Every gate placement on the separating MCSP cut has at least `2^r` crossing wires. -/
 theorem crossingWires_lower_bound (h : BooleanFunction s)

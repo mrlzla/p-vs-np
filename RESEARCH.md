@@ -574,6 +574,12 @@ On the growing schedule $m=2^{2t}$ with $t\ge8$, the paired/unpaired bound adds 
 
 The November 25 public project update reports 87 additional six-input monotone cases where NOT gates save no gates, and lists the four-output shared-gate case as under investigation. There is no announced resolution of P versus NP. [Public status and update](https://data.pequalnp.com/head.json)
 
+### Joint equality on two truth-table blocks
+
+[MCSPJointEquality.lean](frontier/MCSPJointEquality.lean) splits the truth table on one represented variable. Each block has an independent prefix function and affine phase tag. One suffix selector works for both blocks. Exact MCSP at cutoff $m^2$ accepts a splice precisely when both tag pairs match, even after any four flips in the combined table. A mismatch in either block recovers the selector with the same auxiliary information as in the one-block proof.
+
+On the schedule $s=2^r$, $m=r+s+2$, the joint cut requires $2(2^r+s+1)$ distinct crossing source wires. The count includes raw inputs. Placing every gate on one side can leave only raw-input crossings, so this count does not supply distinct gate charges outside the forest. The original global affine control rejects the gated-parity diagonal. A sound sparse control that runs the existing recognizer separately on the two fixed blocks and ANDs their answers passes the whole joint family with $o(N\log N)$ gates, where $N=2^m$.
+
 ## Complementary routes
 
 1. **Direct general-circuit lower bounds.** Find a single explicit language in NP whose circuits exceed every polynomial size bound. The frontier checkout already contains parity gate elimination and the $3.5n-7d$ affine-disperser bound for the full binary basis. These give named baselines for validating a new restriction argument. The parity-addressed multiplexer used in Andreev's function is a useful control because its parity blocks and multiplexer give linear-size general circuits while restricted threshold-circuit models exhibit substantial lower bounds. [Pinned gate-elimination code](https://github.com/cslib-community/cslib-frontier/blob/6a5fb39b1da33ce1f41adf0f9b234982e48e33ef/Complexity/Computability/Circuit/Boolean/GateElimination.lean) · [Pinned affine-disperser code](https://github.com/cslib-community/cslib-frontier/blob/6a5fb39b1da33ce1f41adf0f9b234982e48e33ef/Complexity/Computability/Circuit/Boolean/AffineDisperser.lean) · [Andreev threshold bounds](https://eccc.weizmann.ac.il/report/2026/330/)
