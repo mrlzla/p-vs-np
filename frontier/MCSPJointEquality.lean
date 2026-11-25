@@ -160,13 +160,13 @@ def Tests (h : BooleanFunction s) : Prop :=
   ∀ U V : Labels r s, ∀ D : Finset (Fin (2 ^ ((r+(s+1))+1))), D.card ≤ 4 →
     (mcspSquare ((r+(s+1))+1) (patch D (mixed h U V)) = true ↔ U = V)
 
-private theorem mixed_eq_splice (h : BooleanFunction s) (U V : Labels r s) :
+theorem mixed_eq_splice (h : BooleanFunction s) (U V : Labels r s) :
     mixed h U V = splice (selector h) (diagonal U) (diagonal V) := by
   funext i
   simp [mixed, selector, diagonal, AffineProbes.taggedMixed, joinBlocks, MCSP.truthTable_apply, splice]
   rfl
 
-private theorem card_labels (r s : ℕ) :
+theorem card_labels (r s : ℕ) :
     Fintype.card (Labels r s) = 2 ^ (2 * (2^r+(s+1))) := by
   rw [Fintype.card_fun, Fintype.card_bool, AffineProbes.tagged_card, ← pow_mul, Nat.mul_comm]
 
