@@ -93,69 +93,73 @@ theorem card_nearbyTags_le (p : Program signature (2^(a+d)) g) (j : Fin g) :
   exact (Finset.card_union_le _ _).trans (Nat.add_le_add (card_readerTags_le p j) hSum)
 
 /-- Distinct selected blocks may never occur together in one gate footprint. -/
+def SeparatedBy (tags : Fin g → Finset (BitString a)) (E : Finset (BitString a)) : Prop :=
+  ∀ u ∈ E, ∀ v ∈ E, u ≠ v → ∀ j : Fin g, u ∈ tags j → v ∉ tags j
+
 def Separated (p : Program signature (2^(a+d)) g) (E : Finset (BitString a)) : Prop :=
-  ∀ u ∈ E, ∀ v ∈ E, u ≠ v →
-    ∀ j : Fin g, u ∈ nearbyTags p j → v ∉ nearbyTags p j
+  SeparatedBy (nearbyTags p) E
 
-private noncomputable def occurrences (p : Program signature (2^(a+d)) g)
+private noncomputable def occurrences (tags : Fin g → Finset (BitString a))
     (s : BitString a) : Finset (Fin g) :=
-  Finset.univ.filter fun j => s ∈ nearbyTags p j
+  Finset.univ.filter fun j => s ∈ tags j
 
-private theorem sum_occurrences_le (p : Program signature (2^(a+d)) g) :
-    (∑ s : BitString a, (occurrences p s).card) ≤ 6*g := calc
-  _ = ∑ s : BitString a, ∑ j : Fin g, (if s ∈ nearbyTags p j then 1 else 0) := by
+private theorem sum_occurrences_le (tags : Fin g → Finset (BitString a)) {w : ℕ}
+    (hTags : ∀ j, (tags j).card ≤ w) :
+    (∑ s : BitString a, (occurrences tags s).card) ≤ w*g := calc
+  _ = ∑ s : BitString a, ∑ j : Fin g, (if s ∈ tags j then 1 else 0) := by
     apply Finset.sum_congr rfl
     intro s _
     rw [← Finset.sum_filter]
     simp [occurrences]
-  _ = ∑ j : Fin g, ∑ s : BitString a, (if s ∈ nearbyTags p j then 1 else 0) := Finset.sum_comm
-  _ = ∑ j : Fin g, (nearbyTags p j).card := by
+  _ = ∑ j : Fin g, ∑ s : BitString a, (if s ∈ tags j then 1 else 0) := Finset.sum_comm
+  _ = ∑ j : Fin g, (tags j).card := by
     apply Finset.sum_congr rfl
     intro j _
     rw [← Finset.sum_filter]
     simp
-  _ ≤ ∑ _j : Fin g, 6 := Finset.sum_le_sum fun j _ => card_nearbyTags_le p j
+  _ ≤ ∑ _j : Fin g, w := Finset.sum_le_sum fun j _ => hTags j
   _ = _ := by simp [Nat.mul_comm]
 
-private noncomputable def closedNeighbors (p : Program signature (2^(a+d)) g)
+private noncomputable def closedNeighbors (tags : Fin g → Finset (BitString a))
     (s : BitString a) : Finset (BitString a) :=
-  insert s ((occurrences p s).biUnion (nearbyTags p))
+  insert s ((occurrences tags s).biUnion tags)
 
-private theorem card_closedNeighbors_le (p : Program signature (2^(a+d)) g)
-    (s : BitString a) {K : ℕ} (hK : (occurrences p s).card ≤ K) :
-    (closedNeighbors p s).card ≤ 6*K+1 := by
-  have h : ((occurrences p s).biUnion (nearbyTags p)).card ≤ 6*K := calc
-    _ ≤ ∑ j ∈ occurrences p s, (nearbyTags p j).card := Finset.card_biUnion_le
-    _ ≤ ∑ _j ∈ occurrences p s, 6 := Finset.sum_le_sum fun j _ => card_nearbyTags_le p j
-    _ ≤ _ := by simpa [Nat.mul_comm] using Nat.mul_le_mul_left 6 hK
+private theorem card_closedNeighbors_le (tags : Fin g → Finset (BitString a)) {w : ℕ}
+    (hTags : ∀ j, (tags j).card ≤ w) (s : BitString a) {K : ℕ} (hK : (occurrences tags s).card ≤ K) :
+    (closedNeighbors tags s).card ≤ w*K+1 := by
+  have h : ((occurrences tags s).biUnion tags).card ≤ w*K := calc
+    _ ≤ ∑ j ∈ occurrences tags s, (tags j).card := Finset.card_biUnion_le
+    _ ≤ ∑ _j ∈ occurrences tags s, w := Finset.sum_le_sum fun j _ => hTags j
+    _ ≤ _ := by simpa [Nat.mul_comm] using Nat.mul_le_mul_left w hK
   exact (Finset.card_insert_le _ _).trans (Nat.add_le_add_right h 1)
 
-private theorem choose_separated (p : Program signature (2^(a+d)) g)
-    (S : Finset (BitString a)) (r K : ℕ) (hS : r*(6*K+1) ≤ S.card)
-    (hLight : ∀ s ∈ S, (occurrences p s).card ≤ K) :
-    ∃ E ⊆ S, E.card = r ∧ Separated p E := by
+private theorem choose_separated (tags : Fin g → Finset (BitString a)) {w : ℕ}
+    (hTags : ∀ j, (tags j).card ≤ w)
+    (S : Finset (BitString a)) (r K : ℕ) (hS : r*(w*K+1) ≤ S.card)
+    (hLight : ∀ s ∈ S, (occurrences tags s).card ≤ K) :
+    ∃ E ⊆ S, E.card = r ∧ SeparatedBy tags E := by
   induction r generalizing S with
-  | zero => exact ⟨∅, Finset.empty_subset _, rfl, by simp [Separated]⟩
+  | zero => exact ⟨∅, Finset.empty_subset _, rfl, by simp [SeparatedBy]⟩
   | succ r ih =>
     have hRoom := hS
     rw [Nat.succ_mul] at hRoom
     obtain ⟨s, hs⟩ := Finset.card_pos.mp (by omega : 0 < S.card)
-    let T := S \ closedNeighbors p s
-    have hN := card_closedNeighbors_le p s (hLight s hs)
-    have hCard : r*(6*K+1) ≤ T.card := by
+    let T := S \ closedNeighbors tags s
+    have hN := card_closedNeighbors_le tags hTags s (hLight s hs)
+    have hCard : r*(w*K+1) ≤ T.card := by
       have h := Finset.card_sdiff_add_card_eq_card
-        (Finset.inter_subset_left (s₁ := S) (s₂ := closedNeighbors p s))
+        (Finset.inter_subset_left (s₁ := S) (s₂ := closedNeighbors tags s))
       have hSub := Finset.card_le_card
-        (Finset.inter_subset_right (s₁ := S) (s₂ := closedNeighbors p s))
-      have he : S \ (S ∩ closedNeighbors p s) = T := by
+        (Finset.inter_subset_right (s₁ := S) (s₂ := closedNeighbors tags s))
+      have he : S \ (S ∩ closedNeighbors tags s) = T := by
         ext u
         simp [T]
       rw [he] at h
       omega
     obtain ⟨E, hE, hEc, hSep⟩ := ih T hCard (fun u hu => hLight u (Finset.mem_sdiff.mp hu).1)
     have hNot : s ∉ E := fun h => (Finset.mem_sdiff.mp (hE h)).2 (Finset.mem_insert_self ..)
-    have hSide (u : BitString a) (hu : u ∈ E) (j : Fin g) (hsj : s ∈ nearbyTags p j) :
-        u ∉ nearbyTags p j := fun huj =>
+    have hSide (u : BitString a) (hu : u ∈ E) (j : Fin g) (hsj : s ∈ tags j) :
+        u ∉ tags j := fun huj =>
       (Finset.mem_sdiff.mp (hE hu)).2 (Finset.mem_insert_of_mem
         (Finset.mem_biUnion.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hsj⟩, huj⟩))
     refine ⟨insert s E, ?_, by rw [Finset.card_insert_of_notMem hNot, hEc], ?_⟩
@@ -174,42 +178,64 @@ private theorem choose_separated (p : Program signature (2^(a+d)) g)
         exact hSide u huE j hV hj
       · exact hSep u huE v hvE hne j hj hV
 
-/-- Discard prefixes of excessive degree, and choose separated blocks from
-the remaining covered prefixes by greedy deletion. -/
-theorem exists_separated_covered_blocks (p : Program signature (2^(a+d)) g)
-    (S : Finset (Fin (2^(a+d)))) (r K H : ℕ)
-    (hHeavy : 6*g < K*(H+1))
-    (hRoom : r*(6*K+1) + H + ((Finset.univ : Finset _) \ S).card ≤ 2^a) :
-    ∃ E : Finset (BitString a), E.card = r ∧ Separated p E ∧ blocks (d := d) E ⊆ S := by
-  let missing := ((Finset.univ : Finset _) \ S).image tag
-  let heavy := Finset.univ.filter fun s => K < (occurrences p s).card
-  have hHeavySum : K*heavy.card ≤ 6*g := calc
+/-- Choose separated tags from an explicitly eligible pool. -/
+theorem exists_separated_subset_by (tags : Fin g → Finset (BitString a)) {w : ℕ}
+    (hTags : ∀ j, (tags j).card ≤ w)
+    (S : Finset (BitString a)) (r K H : ℕ)
+    (hHeavy : w*g < K*(H+1))
+    (hRoom : r*(w*K+1) + H ≤ S.card) :
+    ∃ E ⊆ S, E.card = r ∧ SeparatedBy tags E := by
+  let heavy := Finset.univ.filter fun s => K < (occurrences tags s).card
+  have hHeavySum : K*heavy.card ≤ w*g := calc
     _ = ∑ _s ∈ heavy, K := by simp [Nat.mul_comm]
-    _ ≤ ∑ s ∈ heavy, (occurrences p s).card := Finset.sum_le_sum fun s hs =>
+    _ ≤ ∑ s ∈ heavy, (occurrences tags s).card := Finset.sum_le_sum fun s hs =>
       (Finset.mem_filter.mp hs).2.le
-    _ ≤ ∑ s : BitString a, (occurrences p s).card :=
+    _ ≤ ∑ s : BitString a, (occurrences tags s).card :=
       Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ _) (fun _ _ _ => Nat.zero_le _)
-    _ ≤ _ := sum_occurrences_le p
+    _ ≤ _ := sum_occurrences_le tags hTags
   have hH : heavy.card ≤ H := by
     by_contra! h
     exact (not_le_of_gt hHeavy) ((Nat.mul_le_mul_left K h).trans hHeavySum)
-  let bad := missing ∪ heavy
-  let good := Finset.univ \ bad
-  have hM : missing.card ≤ ((Finset.univ : Finset _) \ S).card := Finset.card_image_le
-  have hBad := Finset.card_union_le missing heavy
-  have hGood := Finset.card_sdiff_add_card_eq_card (Finset.subset_univ bad)
-  rw [Finset.card_univ, BitString.card] at hGood
-  change good.card + bad.card = 2^a at hGood
-  change bad.card ≤ missing.card + heavy.card at hBad
-  have hEnough : r*(6*K+1) ≤ good.card := by omega
-  obtain ⟨E, hE, hc, hd⟩ := choose_separated p good r K hEnough (fun s hs => by
+  let good := S \ heavy
+  have hPart := Finset.card_sdiff_add_card_eq_card
+    (Finset.inter_subset_left (s₁ := S) (s₂ := heavy))
+  have hPart' : good.card + (S ∩ heavy).card = S.card := by
+    have hEq : S \ (S ∩ heavy) = good := by ext s; simp [good]
+    rwa [hEq] at hPart
+  have hInt := Finset.card_le_card (Finset.inter_subset_right (s₁ := S) (s₂ := heavy))
+  have hEnough : r*(w*K+1) ≤ good.card := by omega
+  obtain ⟨E, hE, hc, hd⟩ := choose_separated tags hTags good r K hEnough (fun s hs => by
     by_contra! h
-    exact (Finset.mem_sdiff.mp hs).2 (Finset.mem_union_right _ (Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩)))
+    exact (Finset.mem_sdiff.mp hs).2 (Finset.mem_filter.mpr ⟨Finset.mem_univ _, h⟩))
+  exact ⟨E, hE.trans Finset.sdiff_subset, hc, hd⟩
+
+/-- Discard prefixes with missing addresses before applying the selector. -/
+theorem exists_separated_covered_blocks_by (tags : Fin g → Finset (BitString a)) {w : ℕ}
+    (hTags : ∀ j, (tags j).card ≤ w)
+    (S : Finset (Fin (2^(a+d)))) (r K H : ℕ)
+    (hHeavy : w*g < K*(H+1))
+    (hRoom : r*(w*K+1) + H + ((Finset.univ : Finset _) \ S).card ≤ 2^a) :
+    ∃ E : Finset (BitString a), E.card = r ∧ SeparatedBy tags E ∧ blocks (d := d) E ⊆ S := by
+  let missing := ((Finset.univ : Finset _) \ S).image tag
+  let good := Finset.univ \ missing
+  have hM : missing.card ≤ ((Finset.univ : Finset _) \ S).card := Finset.card_image_le
+  have hGood := Finset.card_sdiff_add_card_eq_card (Finset.subset_univ missing)
+  rw [Finset.card_univ, BitString.card] at hGood
+  change good.card + missing.card = 2^a at hGood
+  have hEnough : r*(w*K+1) + H ≤ good.card := by omega
+  obtain ⟨E, hE, hc, hd⟩ := exists_separated_subset_by tags hTags good r K H hHeavy hEnough
   refine ⟨E, hc, hd, ?_⟩
   intro i hi
   by_contra h
   exact (Finset.mem_sdiff.mp (hE (Finset.mem_filter.mp hi).2)).2
-    (Finset.mem_union_left _ (Finset.mem_image.mpr ⟨i, Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, h⟩, rfl⟩))
+    (Finset.mem_image.mpr ⟨i, Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, h⟩, rfl⟩)
+
+theorem exists_separated_covered_blocks (p : Program signature (2^(a+d)) g)
+    (S : Finset (Fin (2^(a+d)))) (r K H : ℕ)
+    (hHeavy : 6*g < K*(H+1))
+    (hRoom : r*(6*K+1) + H + ((Finset.univ : Finset _) \ S).card ≤ 2^a) :
+    ∃ E : Finset (BitString a), E.card = r ∧ Separated p E ∧ blocks (d := d) E ⊆ S :=
+  exists_separated_covered_blocks_by (nearbyTags p) (card_nearbyTags_le p) S r K H hHeavy hRoom
 
 end Conflicts
 
@@ -217,7 +243,7 @@ section Exits
 
 variable {a d g : ℕ}
 
-private theorem has_exit_of_constant_reader (p : Program signature (2^(a+d)) g)
+theorem has_exit_of_constant_reader (p : Program signature (2^(a+d)) g)
     (root : Wire (2^(a+d)) g) (E : Finset (BitString a)) (x : BitString (2^(a+d)))
     (hSep : Separated p E) (hFresh : fresh p Sum.inl = Finset.univ)
     (hNon : ¬∃ b : Bool, restrictedWire p (pinAt x (blocks (d := d) E)) root = fun _ => b)
@@ -464,41 +490,41 @@ end ExactMCSP
 
 section Scaling
 
-/-- Use one eighth as many blocks as there are represented variables. -/
-def separatedBlockCount (t : ℕ) : ℕ := 2^(2*t-3)
+/-- Use one quarter as many blocks as there are represented variables. -/
+def separatedBlockCount (t : ℕ) : ℕ := 2^(2*t-2)
 
-theorem eight_mul_separatedBlockCount (t : ℕ) (ht : 8 ≤ t) :
-    8*separatedBlockCount t = multiBlockArity t := by
+theorem four_mul_separatedBlockCount (t : ℕ) (ht : 8 ≤ t) :
+    4*separatedBlockCount t = multiBlockArity t := by
   unfold separatedBlockCount multiBlockArity
-  rw [show (8:ℕ) = 2^3 by decide, ← pow_add, show 3+(2*t-3) = 2*t by omega]
+  rw [show (4:ℕ) = 2^2 by decide, ← pow_add, show 2+(2*t-2) = 2*t by omega]
 
 private theorem separated_rows (t : ℕ) (ht : 8 ≤ t) :
-    4*(separatedBlockCount t*2^(2*t+1)) = (multiBlockArity t)^2 := calc
-  _ = 2^(2+(2*t-3+(2*t+1))) := by
+    4*(separatedBlockCount t*2^(2*t)) = (multiBlockArity t)^2 := calc
+  _ = 2^(2+(2*t-2+(2*t))) := by
     unfold separatedBlockCount
     rw [show (4:ℕ)=2^2 by decide, ← pow_add, ← pow_add]
   _ = 2^((2*t)*2) := congrArg (fun n : ℕ => 2^n) (by omega)
   _ = _ := pow_mul _ _ _
 
 private theorem same_direct_charge (t : ℕ) (ht : 8 ≤ t) :
-    separatedBlockCount t * 2^(t.log2+(2*t+1)-1) = multiBlockLoss t := by
+    separatedBlockCount t * 2^(t.log2+(2*t)-1) = multiBlockLoss t := by
   unfold separatedBlockCount multiBlockLoss
   rw [← pow_add, ← pow_add]
   congr 1
   omega
 
 private theorem two_mul_multiBlockLoss (t : ℕ) (ht : 8 ≤ t) :
-    2*multiBlockLoss t = separatedBlockCount t*2^(t.log2+(2*t+1)) := by
-  have h : 1 ≤ t.log2+(2*t+1) := by omega
+    2*multiBlockLoss t = separatedBlockCount t*2^(t.log2+(2*t)) := by
+  have h : 1 ≤ t.log2+(2*t) := by omega
   rw [← same_direct_charge t ht,
-    show 2*(separatedBlockCount t*2^(t.log2+(2*t+1)-1)) =
-      separatedBlockCount t*(2*2^(t.log2+(2*t+1)-1)) by ring,
+    show 2*(separatedBlockCount t*2^(t.log2+(2*t)-1)) =
+      separatedBlockCount t*(2*2^(t.log2+(2*t)-1)) by ring,
     ← pow_succ', Nat.sub_add_cancel h]
 
 private theorem growing_conflict_budget (t : ℕ) (ht : 8 ≤ t) :
     let m := multiBlockArity t
     let k := t.log2
-    let l := 2*t+1
+    let l := 2*t
     let d := k+l
     let a := m-d
     let r := separatedBlockCount t
@@ -509,7 +535,7 @@ private theorem growing_conflict_budget (t : ℕ) (ht : 8 ≤ t) :
       2*(multiBlockLoss t + r) ≤ 2^m := by
   let m := multiBlockArity t
   let k := t.log2
-  let l := 2*t+1
+  let l := 2*t
   let d := k+l
   let a := m-d
   let r := separatedBlockCount t
@@ -527,7 +553,7 @@ private theorem growing_conflict_budget (t : ℕ) (ht : 8 ≤ t) :
   have htr : t ≤ (2:ℕ)^t := t.lt_two_pow_self.le
   have hBaseM : (2:ℕ)^t ≤ m := by
     simpa only [Nat.mul_one, ← hM] using Nat.mul_le_mul_left (2^t) (by omega : 1 ≤ (2:ℕ)^t)
-  have hr : 8*r = m := eight_mul_separatedBlockCount t ht
+  have hr : 4*r = m := four_mul_separatedBlockCount t ht
   have hrm : r ≤ m := by omega
   have hd : 2*d+2 ≤ m := calc
     _ ≤ 10*2^t := by
@@ -570,24 +596,37 @@ private theorem growing_conflict_budget (t : ℕ) (ht : 8 ≤ t) :
     _ ≤ m*m^3 := Nat.mul_le_mul_right _ (by omega)
     _ = m^4 := by ring
     _ ≤ _ := GrowingPrefix.four_power_le_exp m (by omega)
-  have hFactor : 24*2^l ≤ r*2^l := Nat.mul_le_mul_right _ (by omega)
-  have hRowsCost : 32*(3*2^l+2*(r*2^l)) ≤ 17*m^2 := by omega
-  have hLib : 2^(2^k)*2^k ≤ m :=
-    (Nat.mul_le_mul (Nat.pow_le_pow_right (by decide : 0 < (2:ℕ)) hK)
-      (hK.trans htr)).trans_eq hM.symm
-  have hBase : 32*(4*m+48+3*2^k+2^(2^k)*2^k) ≤ m^2 := calc
-    _ ≤ 288*m := by omega
-    _ ≤ m*m := Nat.mul_le_mul_right _ (by omega)
-    _ = _ := (pow_two m).symm
-  have hAm : a ≤ m := Nat.sub_le ..
-  have hPrefix : 32*(r*(2*a+3)) ≤ 12*m^2 := calc
-    _ ≤ 32*(r*(3*m)) := Nat.mul_le_mul_left _ (Nat.mul_le_mul_left _ (by omega))
-    _ = (12*(8*r))*m := by ring
-    _ = _ := by rw [hr]; ring
-  refine ⟨by omega, ha, by omega, ?_, by omega⟩
-  unfold lookupBankCost
-  rw [show r*(2*2^l+2*a+3) = 2*(r*2^l)+r*(2*a+3) by ring]
-  omega
+  have hLM : 2^l = m := rfl
+  have hDouble : 2*t ≤ (2:ℕ)^t := calc
+    _ ≤ 2*2^(t-1) := Nat.mul_le_mul_left _ (by
+      have h := (t-1).lt_two_pow_self
+      omega)
+    _ = _ := by rw [← pow_succ', Nat.sub_add_cancel (by omega)]
+  have hLib : 2*(2^(2^k)*2^k) ≤ m := calc
+    _ = (2*2^k)*2^(2^k) := by ring
+    _ ≤ 2^t*2^t := Nat.mul_le_mul
+      ((Nat.mul_le_mul_left 2 hK).trans hDouble)
+      (Nat.pow_le_pow_right (by decide : 0 < (2:ℕ)) hK)
+    _ = _ := hM.symm
+  have hPay : 256*2^t ≤ m := (Nat.mul_le_mul_right (2^t) hR).trans_eq hM.symm
+  have hSmallBase : 2*(3*2^k+48) ≤ m := by omega
+  have hBase : 4*m+48+lookupBankCost k l ≤ 8*m := by
+    unfold lookupBankCost
+    rw [hLM]
+    omega
+  have h19 : 19 ≤ d := by
+    have hLog : 3 ≤ k := (Nat.le_log2 (by omega : t ≠ 0)).mpr ht
+    dsimp only [d, l]
+    omega
+  have hPrefix : r*(2*2^l+2*a+3)+8*m ≤ m^2 := calc
+    _ = r*(2*2^l+2*a+3+32) := by rw [← hr]; ring
+    _ ≤ r*(4*m) := by
+      apply Nat.mul_le_mul_left
+      rw [hLM]
+      dsimp only [a]
+      omega
+    _ = _ := by rw [show r*(4*m) = (4*r)*m by ring, hr, pow_two]
+  exact ⟨by omega, ha, by omega, by omega, by omega⟩
 
 /-- The direct-reader term is preserved, and the downstream term grows
 linearly in the represented arity on this schedule. -/
@@ -597,7 +636,7 @@ theorem mcspSquare_growing_separated_blocks (t : ℕ) (ht : 8 ≤ t) :
         2*descriptionBitBound (multiBlockArity t) + 1) + 17*descriptionBitBound (multiBlockArity t) := by
   let m := multiBlockArity t
   let k := t.log2
-  let l := 2*t+1
+  let l := 2*t
   let a := m-(k+l)
   let L := (2:ℕ)^(k+l)
   let K := 64*L
@@ -638,7 +677,7 @@ end Scaling
 #print axioms exists_matched_exits
 #print axioms original_separated_block_exits
 #print axioms mcspSquare_32_separated_blocks
-#print axioms eight_mul_separatedBlockCount
+#print axioms four_mul_separatedBlockCount
 #print axioms mcspSquare_growing_separated_blocks
 
 end PvsNP.Frontier.IndependentBlockPinning
