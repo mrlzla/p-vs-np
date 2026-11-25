@@ -209,7 +209,7 @@ theorem eligible_prefixes_dense (hd : 2 ≤ d) (c : Circuit signature (2^(a+d)) 
   change 2^a ≤ 2*(eligiblePrefixes (a := a) (d := d) c).card+5*B
   omega
 
-private theorem eligible_covered (c : Circuit signature (2^(a+d)) 1)
+theorem eligible_covered (c : Circuit signature (2^(a+d)) 1)
     (E : Finset (BitString a)) (hE : E ⊆ eligiblePrefixes (a := a) (d := d) c) :
     blocks (d := d) E ⊆ needInputs c.program (c.outputs 0) false := by
   intro i hi
