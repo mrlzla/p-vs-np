@@ -106,9 +106,10 @@ noncomputable def control (r m : ℕ) (hm : r+4 ≤ m) (T : BitString (2 ^ (m+1)
   AffineProbes.control r m hm (readBlock false T) &&
   AffineProbes.control r m hm (readBlock true T)
 
-theorem control_exact (hm : r+4 ≤ m) (hr : 10 ≤ r) (h2 : 2^r ≤ m)
+theorem control_certificate_cost (hm : r+4 ≤ m)
     {T : BitString (2 ^ (m+1))} (h : control r m hm T = true) :
-    mcspSquare (m+1) T = true := by
+    complexity interpretation (single ((MCSP.truthTable (m+1)).symm T)) ≤
+      10*2^r+18*m+40 := by
   obtain ⟨h0, h1⟩ := Bool.and_eq_true_iff.mp h
   let f := (MCSP.truthTable m).symm (readBlock false T)
   let g := (MCSP.truthTable m).symm (readBlock true T)
@@ -121,12 +122,18 @@ theorem control_exact (hm : r+4 ≤ m) (hr : 10 ≤ r) (h2 : 2^r ≤ m)
   have hHi := AffineProbes.control_certificate_cost hm h1
   change complexity interpretation (single f) ≤ _ at hLo
   change complexity interpretation (single g) ≤ _ at hHi
+  rw [hEval]
+  exact (mux_cost f g).trans (by omega)
+
+theorem control_exact (hm : r+4 ≤ m) (hr : 10 ≤ r) (h2 : 2^r ≤ m)
+    {T : BitString (2 ^ (m+1))} (h : control r m hm T = true) :
+    mcspSquare (m+1) T = true := by
   have hBig := (Nat.pow_le_pow_right (by decide : 0 < (2 : ℕ)) hr).trans h2
   change 1024 ≤ m at hBig
   have hBudget := Nat.mul_le_mul_right (m+1) (by omega : 48 ≤ m+1)
   rw [← pow_two] at hBudget
-  rw [mcspSquare, GapMCSP.slice_yesSet_eq_true_iff, hEval]
-  exact (mux_cost f g).trans (by omega)
+  rw [mcspSquare, GapMCSP.slice_yesSet_eq_true_iff]
+  exact (control_certificate_cost hm h).trans (by omega)
 
 theorem control_size (hm : r+4 ≤ m) :
     complexity interpretation (single (control r m hm)) ≤
@@ -156,9 +163,11 @@ def selector (h : BooleanFunction s) : BitString (2 ^ ((r+(s+1))+1)) :=
 def mixed (h : BooleanFunction s) (U V : Labels r s) : BitString (2 ^ ((r+(s+1))+1)) :=
   joinBlocks (fun b => AffineProbes.taggedMixed h (U b) (V b))
 
-def Tests (h : BooleanFunction s) : Prop :=
-  ∀ U V : Labels r s, ∀ D : Finset (Fin (2 ^ ((r+(s+1))+1))), D.card ≤ 4 →
+def TestsAt (radius : ℕ) (h : BooleanFunction s) : Prop :=
+  ∀ U V : Labels r s, ∀ D : Finset (Fin (2 ^ ((r+(s+1))+1))), D.card ≤ radius →
     (mcspSquare ((r+(s+1))+1) (patch D (mixed h U V)) = true ↔ U = V)
+
+abbrev Tests (h : BooleanFunction s) : Prop := TestsAt (r := r) 4 h
 
 theorem mixed_eq_splice (h : BooleanFunction s) (U V : Labels r s) :
     mixed h U V = splice (selector h) (diagonal U) (diagonal V) := by
@@ -184,9 +193,10 @@ private theorem control_accepts_diagonal (hm : r+4 ≤ r+(s+1)) (h15 : 15 ≤ r+
   simp [control, diagonal, hBlock]
 
 /-- The same selector works for both disjoint blocks, even with independent
-affine tags and four arbitrary flips of the combined table. -/
-theorem exists_selector (r t : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1) :
-    ∃ h : BooleanFunction (t+1), Tests (r := r) h := by
+affine tags and up to 36 arbitrary flips of the combined table. -/
+theorem exists_selectorAt (r t radius : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1)
+    (hRadius : radius ≤ 36) :
+    ∃ h : BooleanFunction (t+1), TestsAt (r := r) radius h := by
   let m := r+(t+2)
   let p := 2*(2^r+(t+2))
   have hBig : 1024 ≤ t+1 :=
@@ -195,7 +205,7 @@ theorem exists_selector (r t : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1) :
   have hm2 : 2^r ≤ m := by dsimp [m]; omega
   have hm15 : 15 ≤ m := by dsimp [m]; omega
   have hCard (k : ℕ) : Fintype.card (BooleanFunction k) = 2 ^ 2 ^ k := by simp
-  have room : 2 ^ (p+p+((m+1)+1)*4+descriptionBitBound (m+1)+2^t) <
+  have room : 2 ^ (p+p+((m+1)+1)*radius+descriptionBitBound (m+1)+2^t) <
       Fintype.card (BooleanFunction (t+1)) := by
     rw [hCard, pow_succ 2 t]
     apply Nat.pow_lt_pow_right (by decide : 1 < (2 : ℕ))
@@ -207,21 +217,36 @@ theorem exists_selector (r t : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1) :
         _ = _ := by ring
     have hLinear : t ≤ t^3 := by
       simpa using Nat.pow_le_pow_right (by omega : 0 < t) (by decide : 1 ≤ 3)
-    have hPoly : p+p+((m+1)+1)*4+descriptionBitBound (m+1) ≤ 816*t^3 := by
-      dsimp [p, m]
+    have hPoly : p+p+((m+1)+1)*radius+descriptionBitBound (m+1) ≤ 950*t^3 := by
+      have hWidth : r ≤ t+1 := Nat.lt_two_pow_self.le.trans ht
+      have hExtra := Nat.mul_le_mul_left ((m+1)+1) hRadius
+      dsimp [p, m] at hExtra ⊢
       change 2^r+2^r+(((r+(t+2))+1)+1)*4+descriptionBitBound ((r+(t+2))+1) ≤ _ at hWide
       omega
-    have hLt : 816*t^3 < t^4 := by
+    have hLt : 950*t^3 < t^4 := by
       rw [pow_succ' t 3]
       exact Nat.mul_lt_mul_of_pos_right (by omega) (Nat.pow_pos (by omega : 0 < t))
     have hExp := GrowingPrefix.four_power_le_exp t (by omega)
     omega
-  refine exists_family_selector_with_aux (mcspSquare (m+1)) (mixed (r := r) (s := t+1))
+  refine exists_family_selector_with_aux_radius (mcspSquare (m+1)) (mixed (r := r) (s := t+1))
     (card_labels r (t+1)) (q := m+1) le_rfl (card_accepting_mcspSquare_le _) (hCard t).le room ?_ ?_
   · intro h U D hD
     have hDiag : mixed h U U = diagonal U := by rw [mixed_eq_splice, splice_self]
     rw [hDiag]
-    exact control_exact hm hr hm2 (control_accepts_diagonal hm hm15 U D hD)
+    let F := (MCSP.truthTable (m+1)).symm (diagonal U)
+    have hDiagCost : complexity interpretation (single F) ≤ 10*2^r+18*m+40 := by
+      have hEmpty := control_accepts_diagonal hm hm15 U ∅ (by simp)
+      have he : patch ∅ (diagonal U) = diagonal U := by funext i; simp [patch]
+      rw [he] at hEmpty
+      exact control_certificate_cost hm hEmpty
+    have hBase : MCSP.truthTable (m+1) F = diagonal U := Equiv.apply_symm_apply _ _
+    rw [← hBase, mcspSquare, GapMCSP.slice_yesSet_eq_true_iff]
+    have hCost := JuntaRadius.patched_function_cost_count F D hDiagCost
+    have hMul := Nat.mul_le_mul_right ((m+1)+2) (hD.trans hRadius)
+    have hBigM : 1024 ≤ m := by dsimp [m]; omega
+    have hEnough := Nat.mul_le_mul_right (m+1) (by omega : 70 ≤ m+1)
+    rw [← pow_two] at hEnough
+    exact hCost.trans (by omega)
   · intro U V hne
     obtain ⟨b, hb⟩ : ∃ b, U b ≠ V b := by
       by_contra! h
@@ -232,6 +257,10 @@ theorem exists_selector (r t : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1) :
     simp only [mixed, read_join] at hMix
     have hAuxEq : aux h = aux g := congrArg Prod.snd he
     exact Prod.ext hMix hAuxEq
+
+theorem exists_selector (r t : ℕ) (hr : 10 ≤ r) (ht : 2^r ≤ t+1) :
+    ∃ h : BooleanFunction (t+1), Tests (r := r) h :=
+  exists_selectorAt r t 4 hr ht (by decide)
 
 theorem control_passes (hm : r+4 ≤ r+(s+1)) (hr : 10 ≤ r) (h2 : 2^r ≤ r+(s+1))
     {h : BooleanFunction s} (hh : Tests (r := r) h) (U V : Labels r s)

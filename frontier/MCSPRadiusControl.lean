@@ -204,8 +204,11 @@ section Size
 
 variable {l : ℕ}
 
-def counterState {n : ℕ} (f : Fin n → BooleanFunction l) (j : Fin 6) : BooleanFunction l :=
+def counterStateAt {n k : ℕ} (f : Fin n → BooleanFunction l) (j : Fin k) : BooleanFunction l :=
   fun X => decide (j.val ≤ weight (fun i => f i X))
+
+abbrev counterState {n : ℕ} (f : Fin n → BooleanFunction l) (j : Fin 6) : BooleanFunction l :=
+  counterStateAt f j
 
 private theorem threshold_step {n : ℕ} (b : Bool) (q : BitString n) (j : ℕ) :
     decide (j + 1 ≤ weight (Fin.cons b q)) =
@@ -215,57 +218,64 @@ private theorem threshold_step {n : ℕ} (b : Bool) (q : BitString n) (j : ℕ) 
   simp only [decide_eq_true_eq, Bool.or_eq_true, Bool.and_eq_true]
   cases b <;> simp; omega
 
-/-- Six running threshold bits suffice. Each update costs at most twelve
-gates because it reuses all five earlier nonzero thresholds. -/
-theorem synth_counter {n : ℕ} (base : Set (BooleanFunction l))
+/-- Each update reuses the earlier threshold bits and costs at most two gates per threshold. -/
+theorem synth_counterAt {n k : ℕ} (hk : 0 < k) (base : Set (BooleanFunction l))
     (f : Fin n → BooleanFunction l) (hf : ∀ j, f j ∈ base) :
-    Synthesis interpretation base (Set.range (counterState f)) (12 * n + 2) := by
+    Synthesis interpretation base (Set.range (counterStateAt (k := k) f)) (2 * k * n + 2) := by
   induction n with
   | zero =>
     have hlo : Synthesis interpretation base {fun _ => false} 1 := Synthesis.const false
     have hhi : Synthesis interpretation base {fun _ => true} 1 := Synthesis.const true
     apply (hlo.union hhi).mono Set.Subset.rfl ?_ (by omega)
     rintro _ ⟨j, rfl⟩
-    have he : counterState f j = fun _ => decide (j.val = 0) := by
+    have he : counterStateAt f j = fun _ => decide (j.val = 0) := by
       funext X
-      simp [counterState, weight]
+      simp [counterStateAt, weight]
     rw [he]
     by_cases hj : j.val = 0 <;> simp [hj]
   | succ n ih =>
+    obtain ⟨k, rfl⟩ := Nat.exists_eq_succ_of_ne_zero (Nat.ne_of_gt hk)
     let g : Fin n → BooleanFunction l := fun i => f i.succ
-    let available := base ∪ Set.range (counterState g)
-    have hBase : Synthesis interpretation base (Set.range (counterState g)) (12 * n + 2) :=
+    let available := base ∪ Set.range (counterStateAt (k := k+1) g)
+    have hBase : Synthesis interpretation base (Set.range (counterStateAt (k := k+1) g)) (2 * (k+1) * n + 2) :=
       ih g (fun i => hf i.succ)
-    have hNew (j : Fin 6) : Synthesis interpretation available {counterState f j} 2 := by
+    have hNew (j : Fin (k+1)) : Synthesis interpretation available {counterStateAt f j} 2 := by
       refine Fin.cases ?_ (fun k => ?_) j
-      · have he : counterState f 0 = counterState g 0 := by funext X; simp [counterState]
+      · have he : counterStateAt f (0 : Fin (k+1)) = counterStateAt g (0 : Fin (k+1)) := by funext X; simp [counterStateAt]
         rw [he]
-        exact (Synthesis.of_mem (show counterState g 0 ∈ available from Or.inr ⟨0, rfl⟩)).mono
+        exact (Synthesis.of_mem (show counterStateAt g (0 : Fin (k+1)) ∈ available from Or.inr ⟨0, rfl⟩)).mono
           Set.Subset.rfl Set.Subset.rfl (by decide)
-      · have hA : Synthesis interpretation available {counterState g k.succ} 0 :=
+      · have hA : Synthesis interpretation available {counterStateAt g k.succ} 0 :=
           Synthesis.of_mem (Or.inr ⟨k.succ, rfl⟩)
-        have hB : Synthesis interpretation available {counterState g k.castSucc} 0 :=
+        have hB : Synthesis interpretation available {counterStateAt g k.castSucc} 0 :=
           Synthesis.of_mem (Or.inr ⟨k.castSucc, rfl⟩)
         have hRead : Synthesis interpretation available {f 0} 0 := Synthesis.of_mem (Or.inl (hf 0))
-        have he : counterState f k.succ = fun X =>
-            counterState g k.succ X || (f 0 X && counterState g k.castSucc X) := by
+        have he : counterStateAt f k.succ = fun X =>
+            counterStateAt g k.succ X || (f 0 X && counterStateAt g k.castSucc X) := by
           funext X
           have hw : (fun i => f i X) = Fin.cons (f 0 X) (fun i => g i X) :=
             (Fin.cons_self_tail (fun i => f i X)).symm
-          unfold counterState
+          unfold counterStateAt
           rw [hw]
           exact threshold_step _ _ k.val
         rw [he]
         exact hA.or (hRead.and hB)
-    apply (hBase.trans (Synthesis.family (counterState f) (fun _ => 2) hNew)).mono
+    apply (hBase.trans (Synthesis.family (counterStateAt (k := k+1) f) (fun _ => 2) hNew)).mono
       Set.Subset.rfl Set.Subset.rfl
     simp only [Finset.sum_const, smul_eq_mul, Finset.card_univ, Fintype.card_fin]
+    rw [Nat.mul_succ (2*(k+1)) n]
     omega
+
+theorem synth_counter {n : ℕ} (base : Set (BooleanFunction l))
+    (f : Fin n → BooleanFunction l) (hf : ∀ j, f j ∈ base) :
+    Synthesis interpretation base (Set.range (counterState f)) (12 * n + 2) :=
+  synth_counterAt (by decide : 0 < 6) base f hf
 
 variable {s : ℕ} (sample : Fin 9 ↪ BitString s)
 
 /-- Decoding each prefix once, then counting discrepancies with the running
 threshold bits, uses a uniform constant number of gates per table entry. -/
+
 theorem radius_size :
     complexity interpretation (single (radius sample)) ≤
       16 * 2 ^ (9 + (s + 1)) + 5243395 := by

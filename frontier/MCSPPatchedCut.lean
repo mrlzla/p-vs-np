@@ -47,19 +47,19 @@ theorem patched_prefix_accepted (f : Prefix) (D : Finset Address) (hD : D.card �
 def mixed (h : Selector) (f g : Prefix) : BitString (2 ^ 32) :=
   splice (mask 9 h) (probe 22 f) (probe 22 g)
 
-abbrev PatchList (n : ℕ) := Fin 4 → Option (Fin n)
+abbrev PatchList (n : ℕ) (radius : ℕ := 4) := Fin radius → Option (Fin n)
 
 def optionSet {n : ℕ} (o : Option (Fin n)) : Finset (Fin n) :=
   o.elim ∅ fun i => {i}
 
-noncomputable def patchList {n : ℕ} (e : PatchList n) : Finset (Fin n) :=
+noncomputable def patchList {n radius : ℕ} (e : PatchList n radius) : Finset (Fin n) :=
   Finset.univ.biUnion fun j => optionSet (e j)
 
-theorem patchList_surj {n : ℕ} (D : Finset (Fin n)) (hD : D.card ≤ 4) :
-    ∃ e : PatchList n, patchList e = D := by
+theorem patchList_surj {n radius : ℕ} (D : Finset (Fin n)) (hD : D.card ≤ radius) :
+    ∃ e : PatchList n radius, patchList e = D := by
   classical
   let enum : Fin D.card ≃ D := (Fintype.equivFinOfCardEq (Fintype.card_coe _)).symm
-  let e (j : Fin 4) : Option (Fin n) :=
+  let e (j : Fin radius) : Option (Fin n) :=
     if h : j.val < D.card then some (enum ⟨j.val, h⟩).val else none
   refine ⟨e, ?_⟩
   ext i
@@ -72,20 +72,20 @@ theorem patchList_surj {n : ℕ} (D : Finset (Fin n)) (hD : D.card ≤ 4) :
     · simp [e, h, optionSet] at hj
   · intro hi
     let j := enum.symm ⟨i, hi⟩
-    let j' : Fin 4 := ⟨j.val, j.isLt.trans_le hD⟩
+    let j' : Fin radius := ⟨j.val, j.isLt.trans_le hD⟩
     apply Finset.mem_biUnion.mpr
     refine ⟨j', Finset.mem_univ _, ?_⟩
     have hj : j'.val < D.card := j.isLt
     simp [e, hj, optionSet, j', j]
 
-private noncomputable def badOneFor {A H : Type} [Fintype H] {n : ℕ}
-    (F : BooleanFunction n) (mix : H → A → A → BitString n) (test : A × A × PatchList n) : Finset H :=
+private noncomputable def badOneFor {A H : Type} [Fintype H] {n radius : ℕ}
+    (F : BooleanFunction n) (mix : H → A → A → BitString n) (test : A × A × PatchList n radius) : Finset H :=
   if test.1 = test.2.1 then ∅ else
     Finset.univ.filter fun h => F (patch (patchList test.2.2) (mix h test.1 test.2.1)) = true
 
 private noncomputable def badFor {A H : Type} [Fintype A] [Fintype H] [DecidableEq H] {n : ℕ}
-    (F : BooleanFunction n) (mix : H → A → A → BitString n) : Finset H :=
-  (Finset.univ : Finset (A × A × PatchList n)).biUnion (badOneFor F mix)
+    (F : BooleanFunction n) (mix : H → A → A → BitString n) (radius : ℕ := 4) : Finset H :=
+  (Finset.univ : Finset (A × A × PatchList n radius)).biUnion (badOneFor F mix)
 
 private theorem badOne_card (test : Prefix × Prefix × PatchList (2 ^ 32)) :
     (badOneFor (mcspSquare 32) mixed test).card ≤ 2 ^ descriptionBitBound 32 := by
@@ -144,11 +144,11 @@ private theorem exists_outside {H : Type} {s t : Finset H} (hc : s.card < t.card
   by_contra! h
   exact (not_le_of_gt hc) (Finset.card_le_card h)
 
-private theorem choose_good {A H : Type} [Fintype A] [Fintype H] [DecidableEq H] {n : ℕ}
+private theorem choose_good {A H : Type} [Fintype A] [Fintype H] [DecidableEq H] {n radius : ℕ}
     (F : BooleanFunction n) (mix : H → A → A → BitString n) (C : Finset H) (P : H → Prop)
-    (hC : (badFor F mix).card < C.card) (hP : ∀ h ∈ C, P h)
-    (diag : ∀ h f D, D.card ≤ 4 → F (patch D (mix h f f)) = true) :
-    ∃ h, P h ∧ ∀ f g D, D.card ≤ 4 → (F (patch D (mix h f g)) = true ↔ f = g) := by
+    (hC : (badFor F mix radius).card < C.card) (hP : ∀ h ∈ C, P h)
+    (diag : ∀ h f D, D.card ≤ radius → F (patch D (mix h f f)) = true) :
+    ∃ h, P h ∧ ∀ f g D, D.card ≤ radius → (F (patch D (mix h f g)) = true ↔ f = g) := by
   obtain ⟨h, hMem, hGood⟩ := exists_outside hC
   refine ⟨h, hP h hMem, fun f g D hD => ?_⟩
   constructor
@@ -162,19 +162,19 @@ private theorem choose_good {A H : Type} [Fintype A] [Fintype H] [DecidableEq H]
   · rintro rfl
     exact diag h f D hD
 
-/-- A single selector avoids all four-flip off-diagonals when the mixed
+/-- A single selector avoids all patched off-diagonals when the mixed
 table identifies the selector with bounded auxiliary information. -/
-theorem exists_family_selector_with_aux {A H J : Type}
-    [Fintype A] [Fintype H] [DecidableEq H] [Fintype J] {n p q B d : ℕ}
+theorem exists_family_selector_with_aux_radius {A H J : Type}
+    [Fintype A] [Fintype H] [DecidableEq H] [Fintype J] {n p q B d radius : ℕ}
     (F : BooleanFunction n) (mix : H → A → A → BitString n)
     (hA : Fintype.card A = 2 ^ p) (hN : n ≤ 2 ^ q)
     (hSparse : (acceptingTables F).card ≤ 2 ^ B) (hJ : Fintype.card J ≤ 2 ^ d)
-    (room : 2 ^ (p + p + (q + 1) * 4 + B + d) < Fintype.card H)
-    (diagonal : ∀ h f D, D.card ≤ 4 → F (patch D (mix h f f)) = true)
+    (room : 2 ^ (p + p + (q + 1) * radius + B + d) < Fintype.card H)
+    (diagonal : ∀ h f D, D.card ≤ radius → F (patch D (mix h f f)) = true)
     (separate : ∀ {f g}, f ≠ g →
       ∃ aux : H → J, Function.Injective (fun h => (mix h f g, aux h))) :
-    ∃ h, ∀ f g D, D.card ≤ 4 → (F (patch D (mix h f g)) = true ↔ f = g) := by
-  have hOne (test : A × A × PatchList n) : (badOneFor F mix test).card ≤ 2 ^ (B + d) := by
+    ∃ h, ∀ f g D, D.card ≤ radius → (F (patch D (mix h f g)) = true ↔ f = g) := by
+  have hOne (test : A × A × PatchList n radius) : (badOneFor F mix test).card ≤ 2 ^ (B + d) := by
     by_cases he : test.1 = test.2.1
     · simp [badOneFor, he]
     · obtain ⟨aux, hinj⟩ := separate he
@@ -191,18 +191,30 @@ theorem exists_family_selector_with_aux {A H J : Type}
       · intro x _ y _ hxy
         have hAux : aux x = aux y := congrArg Prod.snd hxy
         exact hinj (Prod.ext ((patch_injective _) (congrArg Prod.fst hxy)) hAux)
-  have hcard : (badFor F mix).card ≤ 2 ^ (p + p + (q + 1) * 4 + B + d) := by
-    have hTests : Fintype.card (A × A × PatchList n) ≤ 2 ^ (p + p + (q+1) * 4) :=
-      tuple_test_card (a := p) (b := q) (n := 4) hA (by simpa only [Fintype.card_fin] using hN)
+  have hcard : (badFor F mix radius).card ≤ 2 ^ (p + p + (q + 1) * radius + B + d) := by
+    have hTests : Fintype.card (A × A × PatchList n radius) ≤ 2 ^ (p + p + (q+1) * radius) :=
+      tuple_test_card (a := p) (b := q) (n := radius) hA (by simpa only [Fintype.card_fin] using hN)
     calc
-      _ ≤ Fintype.card (A × A × PatchList n) * 2 ^ (B + d) := card_biUnion_univ_le _ _ hOne
-      _ ≤ 2 ^ (p + p + (q+1) * 4) * 2 ^ (B + d) := Nat.mul_le_mul_right _ hTests
+      _ ≤ Fintype.card (A × A × PatchList n radius) * 2 ^ (B + d) := card_biUnion_univ_le _ _ hOne
+      _ ≤ 2 ^ (p + p + (q+1) * radius) * 2 ^ (B + d) := Nat.mul_le_mul_right _ hTests
       _ = _ := by rw [← pow_add, ← Nat.add_assoc]
-  have hlt : (badFor F mix).card < (Finset.univ : Finset H).card := by
+  have hlt : (badFor F mix radius).card < (Finset.univ : Finset H).card := by
     rw [Finset.card_univ]
     exact hcard.trans_lt room
   obtain ⟨h, _, ht⟩ := choose_good F mix Finset.univ (fun _ => True) hlt (fun _ _ => trivial) diagonal
   exact ⟨h, ht⟩
+
+theorem exists_family_selector_with_aux {A H J : Type}
+    [Fintype A] [Fintype H] [DecidableEq H] [Fintype J] {n p q B d : ℕ}
+    (F : BooleanFunction n) (mix : H → A → A → BitString n)
+    (hA : Fintype.card A = 2 ^ p) (hN : n ≤ 2 ^ q)
+    (hSparse : (acceptingTables F).card ≤ 2 ^ B) (hJ : Fintype.card J ≤ 2 ^ d)
+    (room : 2 ^ (p + p + (q + 1) * 4 + B + d) < Fintype.card H)
+    (diagonal : ∀ h f D, D.card ≤ 4 → F (patch D (mix h f f)) = true)
+    (separate : ∀ {f g}, f ≠ g →
+      ∃ aux : H → J, Function.Injective (fun h => (mix h f g, aux h))) :
+    ∃ h, ∀ f g D, D.card ≤ 4 → (F (patch D (mix h f g)) = true ↔ f = g) :=
+  exists_family_selector_with_aux_radius F mix hA hN hSparse hJ room diagonal separate
 
 /-- The injective case needs no auxiliary information. -/
 theorem exists_family_selector {A H : Type} [Fintype A] [Fintype H] [DecidableEq H] {n p q B : ℕ}

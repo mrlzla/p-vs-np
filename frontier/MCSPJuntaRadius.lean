@@ -303,10 +303,10 @@ theorem value_costFor {r m : ℕ} (c : CodeFor r m) :
   have h := value_cost_from_circuit c core hc
   omega
 
-theorem patched_function_cost {m B : ℕ} (f : BooleanFunction m) (D : Finset (Fin (2 ^ m)))
-    (hD : D.card ≤ 4) (hV : complexity interpretation (single f) ≤ B) :
+theorem patched_function_cost_count {m B : ℕ} (f : BooleanFunction m) (D : Finset (Fin (2 ^ m)))
+    (hV : complexity interpretation (single f) ≤ B) :
     complexity interpretation (single ((MCSP.truthTable m).symm
-      (patch D (MCSP.truthTable m f)))) ≤ B + 5 * m + 13 := by
+      (patch D (MCSP.truthTable m f)))) ≤ B + m + D.card * (m+2) + 5 := by
   let fix : BooleanFunction m := fun z => decide (BitString.equivFin m z ∈ D)
   have hEq : (MCSP.truthTable m).symm (patch D (MCSP.truthTable m f)) =
       fun z => f z ^^ fix z := by
@@ -317,8 +317,14 @@ theorem patched_function_cost {m B : ℕ} (f : BooleanFunction m) (D : Finset (F
   rw [hEq]
   have hFix : complexity interpretation (single fix) ≤ m + D.card * (m + 2) + 1 :=
     MinorityResidual.point_indicator_complexity_le m D
-  have hD' := Nat.mul_le_mul_right (m + 2) hD
   exact (complexity_xor_le f fix).trans (by omega)
+
+theorem patched_function_cost {m B : ℕ} (f : BooleanFunction m) (D : Finset (Fin (2 ^ m)))
+    (hD : D.card ≤ 4) (hV : complexity interpretation (single f) ≤ B) :
+    complexity interpretation (single ((MCSP.truthTable m).symm
+      (patch D (MCSP.truthTable m f)))) ≤ B + 5 * m + 13 := by
+  have hD' := Nat.mul_le_mul_right (m+2) hD
+  exact (patched_function_cost_count f D hV).trans (by omega)
 
 theorem patched_function_of_budget {m B : ℕ} (f : BooleanFunction m) (D : Finset (Fin (2 ^ m)))
     (hD : D.card ≤ 4) (hV : complexity interpretation (single f) ≤ B)

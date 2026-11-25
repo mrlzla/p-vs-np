@@ -26,9 +26,9 @@ def blockSwap (j : Fin (m+1)) : Equiv.Perm (Fin (m+1)) := Equiv.swap 0 j
 def rotated {n : ℕ} (j : Fin (n+1)) (T : BitString (2 ^ (n+1))) : BitString (2 ^ (n+1)) :=
   T ∘ tablePerm (blockSwap j)
 
-theorem exact_transport {h : BooleanFunction s} (hh : Tests (r := r) h)
+theorem exact_transportAt {radius : ℕ} {h : BooleanFunction s} (hh : TestsAt (r := r) radius h)
     (j : Fin (Arity r s)) (U V : Labels r s)
-    (D : Finset (Fin (2 ^ Arity r s))) (hD : D.card ≤ 4) :
+    (D : Finset (Fin (2 ^ Arity r s))) (hD : D.card ≤ radius) :
     mcspSquare (Arity r s) (patch D (rotated j (mixed h U V))) = true ↔ U = V := by
   let e := blockSwap j
   let p := tablePerm e
@@ -38,6 +38,12 @@ theorem exact_transport {h : BooleanFunction s} (hh : Tests (r := r) h)
     simp [patch, Function.comp_apply, rotated, p, e]
   rw [he, square_comp_tablePerm]
   exact hh U V _ (by simpa using hD)
+
+theorem exact_transport {h : BooleanFunction s} (hh : Tests (r := r) h)
+    (j : Fin (Arity r s)) (U V : Labels r s)
+    (D : Finset (Fin (2 ^ Arity r s))) (hD : D.card ≤ 4) :
+    mcspSquare (Arity r s) (patch D (rotated j (mixed h U V))) = true ↔ U = V :=
+  exact_transportAt hh j U V D hD
 
 theorem crossing_width {h : BooleanFunction s} (hh : Tests (r := r) h)
     (j : Fin (Arity r s)) (D : Finset (Fin (2 ^ Arity r s))) (hD : D.card ≤ 4)
@@ -201,17 +207,22 @@ theorem predicted_of_clean {d : ℕ} {a : BitString m} {F : BooleanFunction m}
 noncomputable def belongs (F : BooleanFunction (Arity r s)) : Bool :=
   decide (∃ j : Fin (Arity r s), ∀ z ∈ sample (r+1) (Arity r s), F z = fit j F z)
 
-noncomputable def attempt (a : BitString (Arity r s)) (T : BitString (2 ^ Arity r s)) : Bool :=
+noncomputable def attemptAt (radius : ℕ) (a : BitString (Arity r s))
+    (T : BitString (2 ^ Arity r s)) : Bool :=
   let F := predicted (r+1) a T
-  belongs (r := r) (s := s) F && decide (JuntaRadius.distance (JuntaRadius.viewed _ T) F ≤ 4)
+  belongs (r := r) (s := s) F && decide (JuntaRadius.distance (JuntaRadius.viewed _ T) F ≤ radius)
 
-noncomputable def control (C : Finset (BitString (Arity r s))) (T : BitString (2 ^ Arity r s)) : Bool :=
-  decide (∃ a ∈ C, attempt (r := r) (s := s) a T = true)
+noncomputable def controlAt (radius : ℕ) (C : Finset (BitString (Arity r s)))
+    (T : BitString (2 ^ Arity r s)) : Bool :=
+  decide (∃ a ∈ C, attemptAt (r := r) (s := s) radius a T = true)
 
-theorem control_witness (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
-    {T : BitString (2 ^ Arity r s)} (hYes : control (r := r) (s := s) C T = true) :
+noncomputable abbrev control (C : Finset (BitString (Arity r s))) (T : BitString (2 ^ Arity r s)) :
+    Bool := controlAt (r := r) (s := s) 4 C T
+
+theorem controlAt_witness {radius : ℕ} (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
+    {T : BitString (2 ^ Arity r s)} (hYes : controlAt (r := r) (s := s) radius C T = true) :
     ∃ (j : Fin (Arity r s)) (U : Labels r s) (D : Finset (Fin (2 ^ Arity r s))),
-      D.card ≤ 4 ∧ T = patch D (rotated j (diagonal U)) := by
+      D.card ≤ radius ∧ T = patch D (rotated j (diagonal U)) := by
   obtain ⟨a, _, ha⟩ := of_decide_eq_true hYes
   obtain ⟨hModel, hDist⟩ := Bool.and_eq_true_iff.mp ha
   let F := predicted (r+1) a T
@@ -221,8 +232,8 @@ theorem control_witness (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
     eq_of_sample _ _ (degree_predicted _ _ _) (degree_rotated hr j U) hj
   let D := (Finset.univ : Finset (Fin (2 ^ Arity r s))).filter fun i =>
     T i ≠ (MCSP.truthTable _ F) i
-  have hD : D.card ≤ 4 := by
-    have hd : JuntaRadius.distance (JuntaRadius.viewed _ T) F ≤ 4 := of_decide_eq_true hDist
+  have hD : D.card ≤ radius := by
+    have hd : JuntaRadius.distance (JuntaRadius.viewed _ T) F ≤ radius := of_decide_eq_true hDist
     rwa [JuntaRadius.distance_eq_raw] at hd
   have hT : T = patch D (MCSP.truthTable _ F) := by
     funext i
@@ -236,19 +247,30 @@ theorem control_witness (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
       rw [hF]
       simp only [JuntaRadius.viewed, Equiv.apply_symm_apply]
 
-theorem control_sound (hr : 1 ≤ r) {h : BooleanFunction s} (hh : Tests (r := r) h)
+theorem control_witness (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
+    {T : BitString (2 ^ Arity r s)} (hYes : control (r := r) (s := s) C T = true) :
+    ∃ (j : Fin (Arity r s)) (U : Labels r s) (D : Finset (Fin (2 ^ Arity r s))),
+      D.card ≤ 4 ∧ T = patch D (rotated j (diagonal U)) :=
+  controlAt_witness hr hYes
+
+theorem controlAt_sound {radius : ℕ} (hr : 1 ≤ r) {h : BooleanFunction s} (hh : TestsAt (r := r) radius h)
     {C : Finset (BitString (Arity r s))} {T : BitString (2 ^ Arity r s)}
-    (hYes : control (r := r) (s := s) C T = true) : mcspSquare (Arity r s) T = true := by
-  obtain ⟨j,U,D,hD,rfl⟩ := control_witness hr hYes
+    (hYes : controlAt (r := r) (s := s) radius C T = true) : mcspSquare (Arity r s) T = true := by
+  obtain ⟨j,U,D,hD,rfl⟩ := controlAt_witness hr hYes
   have he : mixed h U U = diagonal U := by rw [mixed_eq_splice, splice_self]
   rw [← he]
-  exact (exact_transport hh j U U D hD).mpr rfl
+  exact (exact_transportAt hh j U U D hD).mpr rfl
 
-theorem control_accepts (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
-    (hC : 5 ≤ C.card) (hSep : Separated (sample (r+1) (Arity r s)) C)
+theorem control_sound (hr : 1 ≤ r) {h : BooleanFunction s} (hh : Tests (r := r) h)
+    {C : Finset (BitString (Arity r s))} {T : BitString (2 ^ Arity r s)}
+    (hYes : control (r := r) (s := s) C T = true) : mcspSquare (Arity r s) T = true :=
+  controlAt_sound hr hh hYes
+
+theorem controlAt_accepts {radius : ℕ} (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
+    (hC : radius < C.card) (hSep : Separated (sample (r+1) (Arity r s)) C)
     (j : Fin (Arity r s)) (U : Labels r s) (D : Finset (Fin (2 ^ Arity r s)))
-    (hD : D.card ≤ 4) :
-    control (r := r) (s := s) C (patch D (rotated j (diagonal U))) = true := by
+    (hD : D.card ≤ radius) :
+    controlAt (r := r) (s := s) radius C (patch D (rotated j (diagonal U))) = true := by
   let F := JuntaRadius.viewed _ (rotated j (diagonal U))
   let E := D.map (BitString.equivFin (Arity r s)).symm.toEmbedding
   have hSize : E.card < C.card := by rw [Finset.card_map]; omega
@@ -258,13 +280,20 @@ theorem control_accepts (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
   rw [he] at hPred
   apply decide_eq_true
   refine ⟨a, ha, ?_⟩
-  unfold attempt
+  unfold attemptAt
   rw [hPred, Bool.and_eq_true]
   constructor
   · exact decide_eq_true ⟨j, fun z _ => congrFun (fit_rotated j U).symm z⟩
   · have hd := (JuntaRadius.patch_distance_le D F).trans hD
     rw [he] at hd
     exact decide_eq_true hd
+
+theorem control_accepts (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
+    (hC : 5 ≤ C.card) (hSep : Separated (sample (r+1) (Arity r s)) C)
+    (j : Fin (Arity r s)) (U : Labels r s) (D : Finset (Fin (2 ^ Arity r s)))
+    (hD : D.card ≤ 4) :
+    control (r := r) (s := s) C (patch D (rotated j (diagonal U))) = true :=
+  controlAt_accepts hr hC hSep j U D hD
 
 theorem control_iff (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
     (hC : 5 ≤ C.card) (hSep : Separated (sample (r+1) (Arity r s)) C)
@@ -276,18 +305,26 @@ theorem control_iff (hr : 1 ≤ r) {C : Finset (BitString (Arity r s))}
   rintro ⟨j,U,D,hD,rfl⟩
   exact control_accepts hr hC hSep j U D hD
 
+theorem controlAt_passes {radius : ℕ} (hr : 1 ≤ r) {h : BooleanFunction s} (hh : TestsAt (r := r) radius h)
+    {C : Finset (BitString (Arity r s))}
+    (hC : radius < C.card) (hSep : Separated (sample (r+1) (Arity r s)) C)
+    (j : Fin (Arity r s)) (U V : Labels r s) (D : Finset (Fin (2 ^ Arity r s)))
+    (hD : D.card ≤ radius) :
+    controlAt (r := r) (s := s) radius C (patch D (rotated j (mixed h U V))) = true ↔ U = V := by
+  constructor
+  · intro hYes
+    exact (exact_transportAt hh j U V D hD).mp (controlAt_sound hr hh hYes)
+  · rintro rfl
+    rw [mixed_eq_splice, splice_self]
+    exact controlAt_accepts hr hC hSep j U D hD
+
 theorem control_passes (hr : 1 ≤ r) {h : BooleanFunction s} (hh : Tests (r := r) h)
     {C : Finset (BitString (Arity r s))}
     (hC : 5 ≤ C.card) (hSep : Separated (sample (r+1) (Arity r s)) C)
     (j : Fin (Arity r s)) (U V : Labels r s) (D : Finset (Fin (2 ^ Arity r s)))
     (hD : D.card ≤ 4) :
-    control (r := r) (s := s) C (patch D (rotated j (mixed h U V))) = true ↔ U = V := by
-  constructor
-  · intro hYes
-    exact (exact_transport hh j U V D hD).mp (control_sound hr hh hYes)
-  · rintro rfl
-    rw [mixed_eq_splice, splice_self]
-    exact control_accepts hr hC hSep j U D hD
+    control (r := r) (s := s) C (patch D (rotated j (mixed h U V))) = true ↔ U = V :=
+  controlAt_passes hr hh hC hSep j U V D hD
 
 section Size
 
@@ -373,11 +410,11 @@ private theorem synth_belongs (w : BitString (Arity r s) → BooleanFunction n)
       simp [ok, eqTest, belongs, B])
   simpa only [Finset.sum_const, smul_eq_mul, Finset.card_univ, Fintype.card_fin, Nat.add_assoc] using hOut
 
-private theorem synth_distance {m : ℕ} (w : BitString m → BooleanFunction (2^m))
+private theorem synth_distance {m : ℕ} (radius : ℕ) (w : BitString m → BooleanFunction (2^m))
     {S : Set (BooleanFunction (2^m))} (hin : inputs (2^m) ⊆ S) (hw : ∀ z, w z ∈ S) :
     Synthesis interpretation S
-      {fun T => decide (JuntaRadius.distance (JuntaRadius.viewed m T) (fun z => w z T) ≤ 4)}
-      (16*2^m+3) := by
+      {fun T => decide (JuntaRadius.distance (JuntaRadius.viewed m T) (fun z => w z T) ≤ radius)}
+      ((4+2*(radius+2))*2^m+3) := by
   let diff (i : Fin (2^m)) (T : BitString (2^m)) := T i ^^ w ((BitString.equivFin m).symm i) T
   let B := S ∪ Set.range diff
   have hAll : Synthesis interpretation S (Set.range diff) (4*2^m) := by
@@ -385,27 +422,28 @@ private theorem synth_distance {m : ℕ} (w : BitString m → BooleanFunction (2
       (Synthesis.of_mem (hin ⟨i,rfl⟩)).xor (Synthesis.of_mem (hw _))
     simpa only [Finset.sum_const, smul_eq_mul, Finset.card_univ, Fintype.card_fin, Nat.mul_comm] using
       Synthesis.family diff (fun _ => 4) hf
-  have hCount := RadiusControl.synth_counter B diff (fun i => Or.inr ⟨i,rfl⟩)
-  have hOut : Synthesis interpretation (B ∪ Set.range (RadiusControl.counterState diff))
-      {fun T => !RadiusControl.counterState diff 5 T} 1 :=
-    (Synthesis.of_mem (Or.inr ⟨5,rfl⟩)).not
+  let threshold : Fin (radius+2) := ⟨radius+1, by omega⟩
+  have hCount := RadiusControl.synth_counterAt (by omega : 0 < radius+2) B diff (fun i => Or.inr ⟨i,rfl⟩)
+  have hOut : Synthesis interpretation (B ∪ Set.range (RadiusControl.counterStateAt (k := radius+2) diff))
+      {fun T => !RadiusControl.counterStateAt diff threshold T} 1 :=
+    (Synthesis.of_mem (Or.inr ⟨threshold,rfl⟩)).not
   have hBoth := hAll.trans (hCount.trans hOut)
-  refine (Synthesis.congr_iff hBoth (fun T => ?_)).mono Set.Subset.rfl Set.Subset.rfl (by omega)
+  refine (Synthesis.congr_iff hBoth (fun T => ?_)).mono Set.Subset.rfl Set.Subset.rfl (by ring_nf; omega)
   rw [JuntaRadius.distance_eq_raw]
   have hWt : InvariantControl.weight (fun i => diff i T) =
       ((Finset.univ : Finset (Fin (2^m))).filter
         (fun i => T i ≠ MCSP.truthTable m (fun z => w z T) i)).card := by
     rfl
-  simp only [RadiusControl.counterState, hWt, Bool.not_eq_true', decide_eq_false_iff_not,
+  simp only [RadiusControl.counterStateAt, threshold, hWt, Bool.not_eq_true', decide_eq_false_iff_not,
     decide_eq_true_eq]
   omega
 
 def sampleBudget (r s : ℕ) : ℕ :=
   Arity r s * ((sample (r+1) (Arity r s)).card * (8*s+19) + 2) + 1
 
-theorem synth_attempt (a : BitString (Arity r s)) :
-    Synthesis interpretation (inputs (2 ^ Arity r s)) {attempt (r := r) (s := s) a}
-      ((8*(r+1)+16)*2^(Arity r s)+sampleBudget r s+4) := by
+theorem synth_attemptAt (radius : ℕ) (a : BitString (Arity r s)) :
+    Synthesis interpretation (inputs (2 ^ Arity r s)) {attemptAt (r := r) (s := s) radius a}
+      ((8*(r+1)+(4+2*(radius+2)))*2^(Arity r s)+sampleBudget r s+4) := by
   let m := Arity r s
   let w (z : BitString m) (T : BitString (2^m)) := predicted (r+1) a T z
   let S := inputs (2^m) ∪ Set.range w
@@ -416,22 +454,27 @@ theorem synth_attempt (a : BitString (Arity r s)) :
     rintro _ ⟨z,rfl⟩
     exact ⟨bitXor z a,rfl⟩
   have hModel := synth_belongs w (S := S) (fun z => Or.inr ⟨z,rfl⟩)
-  have hDist := synth_distance w (S := S) (fun _ => Or.inl) (fun z => Or.inr ⟨z,rfl⟩)
+  have hDist := synth_distance radius w (S := S) (fun _ => Or.inl) (fun z => Or.inr ⟨z,rfl⟩)
   have hAll := hPredict.trans (hModel.and hDist)
   apply hAll.mono Set.Subset.rfl Set.Subset.rfl
-  change 8*(r+1)*2^m + (sampleBudget r s + (16*2^m+3)+1) ≤
-    (8*(r+1)+16)*2^m+sampleBudget r s+4
-  rw [Nat.add_mul]
+  change 8*(r+1)*2^m + (sampleBudget r s + ((4+2*(radius+2))*2^m+3)+1) ≤
+    (8*(r+1)+(4+2*(radius+2)))*2^m+sampleBudget r s+4
+  simp only [Nat.add_mul]
   omega
+
+theorem controlAt_size (radius : ℕ) (C : Finset (BitString (Arity r s))) :
+    complexity interpretation (single (controlAt (r := r) (s := s) radius C)) ≤
+      C.card * ((8*(r+1)+(4+2*(radius+2)))*2^(Arity r s)+sampleBudget r s+5) + 1 := by
+  have h := Synthesis.exists_mem C (attemptAt (r := r) (s := s) radius)
+    (fun _ => (8*(r+1)+(4+2*(radius+2)))*2^(Arity r s)+sampleBudget r s+4) (fun a _ => synth_attemptAt radius a)
+  have hOut := Synthesis.congr_iff h (g := controlAt (r := r) (s := s) radius C)
+    (fun T => by simp [controlAt])
+  simpa only [Finset.sum_const, smul_eq_mul, Nat.add_assoc] using hOut.complexity_le
 
 theorem control_size (C : Finset (BitString (Arity r s))) :
     complexity interpretation (single (control (r := r) (s := s) C)) ≤
-      C.card * ((8*(r+1)+16)*2^(Arity r s)+sampleBudget r s+5) + 1 := by
-  have h := Synthesis.exists_mem C (attempt (r := r) (s := s))
-    (fun _ => (8*(r+1)+16)*2^(Arity r s)+sampleBudget r s+4) (fun a _ => synth_attempt a)
-  have hOut := Synthesis.congr_iff h (g := control (r := r) (s := s) C)
-    (fun T => by simp [control])
-  simpa only [Finset.sum_const, smul_eq_mul, Nat.add_assoc] using hOut.complexity_le
+      C.card * ((8*(r+1)+16)*2^(Arity r s)+sampleBudget r s+5) + 1 :=
+  controlAt_size 4 C
 
 end Size
 
@@ -457,23 +500,23 @@ private theorem schedule_base (r : ℕ) (hr : 10 ≤ r) : logArity r+1 ≤ 2^(r+
   rw [pow_succ]
   omega
 
-private theorem center_room (r : ℕ) (hr : 10 ≤ r) :
-    4*((sample (r+1) (logArity r)).card * (sample (r+1) (logArity r)).card) < 2^logArity r := by
+private theorem center_room (r : ℕ) (hr : 10 ≤ r) {radius : ℕ} (hRadius : radius ≤ 40) :
+    radius*((sample (r+1) (logArity r)).card * (sample (r+1) (logArity r)).card) < 2^logArity r := by
   let B := (sample (r+1) (logArity r)).card
   have hB : B ≤ 2^((r+1)*(r+1)) := by
     rw [pow_mul]
     exact (card_sample_le _ _).trans (Nat.pow_le_pow_left (schedule_base r hr) _)
-  have hExp : 2+((r+1)*(r+1)+(r+1)*(r+1)) < logArity r := by
+  have hExp : 6+((r+1)*(r+1)+(r+1)*(r+1)) < logArity r := by
     have hMargin := schedule_margin r hr
     change _ < r+(2^r+1)+1
     nlinarith
   calc
-    4*(B*B) ≤ 4*(2^((r+1)*(r+1))*2^((r+1)*(r+1))) :=
-      Nat.mul_le_mul_left _ (Nat.mul_le_mul hB hB)
-    _ = 2^(2+((r+1)*(r+1)+(r+1)*(r+1))) := by rw [pow_add, pow_add 2 ((r+1)*(r+1))]; rfl
+    radius*(B*B) ≤ 64*(2^((r+1)*(r+1))*2^((r+1)*(r+1))) :=
+      Nat.mul_le_mul (hRadius.trans (by decide)) (Nat.mul_le_mul hB hB)
+    _ = 2^(6+((r+1)*(r+1)+(r+1)*(r+1))) := by rw [pow_add, pow_add 2 ((r+1)*(r+1))]; rfl
     _ < 2^logArity r := Nat.pow_lt_pow_right (by decide) hExp
 
-private theorem sample_budget_le (r : ℕ) (hr : 10 ≤ r) :
+theorem sample_budget_le (r : ℕ) (hr : 10 ≤ r) :
     sampleBudget r (2^r) ≤ 2^logArity r := by
   let m := logArity r
   let b := m+1
@@ -504,9 +547,14 @@ private theorem sample_budget_le (r : ℕ) (hr : 10 ≤ r) :
     _ = 2^(5+(r+1)*(r+3)) := by rw [← pow_mul, pow_add]; rfl
     _ ≤ 2^m := Nat.pow_le_pow_right (by decide) hRoom
 
+theorem schedule_centersAt (r : ℕ) (hr : 10 ≤ r) {radius : ℕ} (hRadius : radius ≤ 40) :
+    ∃ C : Finset (BitString (logArity r)), C.card = radius+1 ∧
+      Separated (sample (r+1) (logArity r)) C :=
+  exists_separated _ (sample_nonempty _ _) (center_room r hr hRadius)
+
 theorem schedule_centers (r : ℕ) (hr : 10 ≤ r) :
     ∃ C : Finset (BitString (logArity r)), C.card = 5 ∧ Separated (sample (r+1) (logArity r)) C :=
-  exists_separated _ (sample_nonempty _ _) (center_room r hr)
+  schedule_centersAt r hr (by decide : 4 ≤ 40)
 
 noncomputable def logControl (r : ℕ) (hr : 10 ≤ r) : BooleanFunction (2^logArity r) :=
   control (r := r) (s := 2^r) (schedule_centers r hr).choose
