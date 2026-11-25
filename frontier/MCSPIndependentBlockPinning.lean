@@ -498,7 +498,7 @@ theorem four_mul_separatedBlockCount (t : ℕ) (ht : 8 ≤ t) :
   unfold separatedBlockCount multiBlockArity
   rw [show (4:ℕ) = 2^2 by decide, ← pow_add, show 2+(2*t-2) = 2*t by omega]
 
-private theorem separated_rows (t : ℕ) (ht : 8 ≤ t) :
+theorem separated_rows (t : ℕ) (ht : 8 ≤ t) :
     4*(separatedBlockCount t*2^(2*t)) = (multiBlockArity t)^2 := calc
   _ = 2^(2+(2*t-2+(2*t))) := by
     unfold separatedBlockCount
@@ -506,14 +506,14 @@ private theorem separated_rows (t : ℕ) (ht : 8 ≤ t) :
   _ = 2^((2*t)*2) := congrArg (fun n : ℕ => 2^n) (by omega)
   _ = _ := pow_mul _ _ _
 
-private theorem same_direct_charge (t : ℕ) (ht : 8 ≤ t) :
+theorem same_direct_charge (t : ℕ) (ht : 8 ≤ t) :
     separatedBlockCount t * 2^(t.log2+(2*t)-1) = multiBlockLoss t := by
   unfold separatedBlockCount multiBlockLoss
   rw [← pow_add, ← pow_add]
   congr 1
   omega
 
-private theorem two_mul_multiBlockLoss (t : ℕ) (ht : 8 ≤ t) :
+theorem two_mul_multiBlockLoss (t : ℕ) (ht : 8 ≤ t) :
     2*multiBlockLoss t = separatedBlockCount t*2^(t.log2+(2*t)) := by
   have h : 1 ≤ t.log2+(2*t) := by omega
   rw [← same_direct_charge t ht,
@@ -521,7 +521,7 @@ private theorem two_mul_multiBlockLoss (t : ℕ) (ht : 8 ≤ t) :
       separatedBlockCount t*(2*2^(t.log2+(2*t)-1)) by ring,
     ← pow_succ', Nat.sub_add_cancel h]
 
-private theorem growing_conflict_budget (t : ℕ) (ht : 8 ≤ t) :
+theorem growing_conflict_budget (t : ℕ) (ht : 8 ≤ t) :
     let m := multiBlockArity t
     let k := t.log2
     let l := 2*t
