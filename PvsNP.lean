@@ -9,5 +9,6 @@ public import PvsNP.StrideContraction
 public import PvsNP.ValiantReduction
 public import PvsNP.CircuitCSP
 public import PvsNP.CircuitCSPTradeoff
+public import PvsNP.SeparatorBarrier
 public import PvsNP.Multiplexer
 public import PvsNP.Problem
