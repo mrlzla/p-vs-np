@@ -421,7 +421,7 @@ end GuardControl
 section SignedAndControl
 
 set_option maxHeartbeats 800000 in
-private theorem signedAnd_constant (r : ℕ) (hr : 10 ≤ r) (b : Bool) :
+theorem signedAnd_constant (r : ℕ) (hr : 10 ≤ r) (b : Bool) :
     GrowingAndOrbit.control r hr (fun _ => b) = true := by
   let U : JointEquality.Labels r (2^r) := fun _ => (fun _ => b, false, QuadraticForest.zeroVec _)
   have hTag (v : Bool) : AffineProbes.taggedProbe (U v) = fun _ => b := by

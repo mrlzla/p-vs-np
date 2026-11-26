@@ -38,7 +38,7 @@ def interaction {I : Type*} {n g : ℕ} (p : Program signature n g)
     (base : BitString n) (T : I → BitString n) (j : Fin g) : I → F₂ :=
   gateProduct (p.lines j).op (fun b => centered p base T ((p.lines j).wires b))
 
-private theorem gateProduct_eq_zero {I : Type*} (op : Op)
+theorem gateProduct_eq_zero {I : Type*} (op : Op)
     (h : ¬(op = .and ∨ op = .or)) (D : Fin (signature.Arity op) → I → F₂) :
     gateProduct op D = 0 := by
   cases op with
@@ -60,7 +60,7 @@ private theorem dOR (a b x y : Bool) :
 private theorem dNOT (a b : Bool) : bit ((!a) ^^ (!b)) = bit (a ^^ b) := by
   cases a <;> cases b <;> decide
 
-private theorem gate_centered_mem {I : Type*} (S : Submodule F₂ (I → F₂))
+theorem gate_centered_mem {I : Type*} (S : Submodule F₂ (I → F₂))
     (op : Op) (base : Fin (signature.Arity op) → Bool)
     (T : I → Fin (signature.Arity op) → Bool)
     (hW : ∀ j, (fun i => bit (base j ^^ T i j)) ∈ S)
