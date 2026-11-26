@@ -254,7 +254,7 @@ noncomputable def pinRank (p : Program signature n g) (pin : Fin n → Fin k ⊕
     (a : BitString k) : ℕ :=
   traceRank p (substitute pin a) (fun z => substitute pin (perturb a z))
 
-private theorem pin_raw_linear (pin : Fin n → Fin k ⊕ Bool) (a : BitString k) (i : Fin n) :
+theorem pin_raw_linear (pin : Fin n → Fin k ⊕ Bool) (a : BitString k) (i : Fin n) :
     raw (substitute pin a) (fun z => substitute pin (perturb a z)) i ∈
       linearOn (⊤ : Submodule F₂ (Fin k → F₂)) := by
   cases he : pin i with
