@@ -1395,14 +1395,13 @@ theorem exists_reindexed_quad_forest_mask_witness {n m : ℕ} {f : BooleanFuncti
     Finset.card_filter_le _ _
   exact ⟨x, P, by omega, hMask, hx⟩
 
-/-- Reindexed quadratic-probe forest lower bound with zero linear penalty:
-`280 * (2 * n) + 2 * n ≤ 280 * (complexity f + 2 * B + 1) + 17 * B`. -/
-theorem quad_reindexed_forest_size {n m B : ℕ} {f : BooleanFunction n}
+private theorem quad_reindexed_forest_bounds {n m B : ℕ} {f : BooleanFunction n}
     (e : Fin n ↪ BitString m) (hSparse : (acceptingTables f).card ≤ 2 ^ B)
     (hQuad : ∀ (a : BitString m) (b0 : Bool) (qc qd : BitString m),
       f (fun i => quad a b0 qc qd (e i)) = true) :
-    280 * (2 * n) + 2 * n ≤
-      280 * (complexity interpretation (single f) + 2 * B + 1) + 17 * B := by
+    2 * n ≤ complexity interpretation (single f) + 2 * B + 1 ∧
+    210 * (2 * n) + 2 * n ≤
+      210 * (complexity interpretation (single f) + 2 * B + 1) + 17 * B := by
   obtain ⟨c, hc, hSize⟩ := exists_computes_size_eq_complexity (I := interpretation) (f := single f)
   have hfCorner (b : Bool) : f (fun _ => b) = true := by
     have hEq : (fun i : Fin n => quad (zeroVec m) b (zeroVec m) (zeroVec m) (e i)) =
@@ -1422,11 +1421,30 @@ theorem quad_reindexed_forest_size {n m B : ℕ} {f : BooleanFunction n}
     exact (congrFun (hc y) 0).symm.trans (he.trans ((congrFun (hc x) 0).trans hx))
   have hMasked := card_masked_le hSparse x _ hAccept
   have hUnion := Finset.card_union_le P (stopInputs p root)
-  have hBudget := card_stopInputs_and_roots_le_tight c hc hSparse (hfCorner false) (hfCorner true)
+  have hBudget := card_stopInputs_and_roots_le_ports c hc hSparse (hfCorner false) (hfCorner true)
   have hN0 := card_needInputs_ge_of_sparse c hc hSparse false (hfCorner false)
   have hN1 := card_needInputs_ge_of_sparse c hc hSparse true (hfCorner true)
   have hAcct := needInputs_add_slack_eq p root h0 h1
   dsimp only [p, root] at hMasked hUnion hAcct
+  exact ⟨by omega, by omega⟩
+
+/-- The corner-specific cut endpoints sharpen the reindexed quadratic bound. -/
+theorem quad_reindexed_forest_size_ports {n m B : ℕ} {f : BooleanFunction n}
+    (e : Fin n ↪ BitString m) (hSparse : (acceptingTables f).card ≤ 2 ^ B)
+    (hQuad : ∀ (a : BitString m) (b0 : Bool) (qc qd : BitString m),
+      f (fun i => quad a b0 qc qd (e i)) = true) :
+    210 * (2 * n) + 2 * n ≤
+      210 * (complexity interpretation (single f) + 2 * B + 1) + 17 * B :=
+  (quad_reindexed_forest_bounds e hSparse hQuad).2
+
+/-- Reindexed quadratic-probe forest lower bound with the original coefficient. -/
+theorem quad_reindexed_forest_size {n m B : ℕ} {f : BooleanFunction n}
+    (e : Fin n ↪ BitString m) (hSparse : (acceptingTables f).card ≤ 2 ^ B)
+    (hQuad : ∀ (a : BitString m) (b0 : Bool) (qc qd : BitString m),
+      f (fun i => quad a b0 qc qd (e i)) = true) :
+    280 * (2 * n) + 2 * n ≤
+      280 * (complexity interpretation (single f) + 2 * B + 1) + 17 * B := by
+  obtain ⟨hRead,hBound⟩ := quad_reindexed_forest_bounds e hSparse hQuad
   omega
 
 /-- General unconditional De Morgan circuit lower bound for `mcspSquare m` (`13 ≤ m`). -/
@@ -1435,6 +1453,16 @@ theorem mcspSquare_quad_super_twoN (m : ℕ) (hm : 13 ≤ m) :
       280 * (complexity interpretation (single (mcspSquare m)) +
         2 * descriptionBitBound m + 1) + 17 * descriptionBitBound m :=
   quad_reindexed_forest_size (BitString.equivFin m).symm.toEmbedding
+    (card_accepting_mcspSquare_le m) (fun a b qc qd => by
+      change mcspSquare m (MCSP.truthTable m (quad a b qc qd)) = true
+      exact mcspSquare_accepts_quad m hm a b qc qd)
+
+/-- The improved leading coefficient for the exact quadratic-cutoff slice. -/
+theorem mcspSquare_quad_super_twoN_ports (m : ℕ) (hm : 13 ≤ m) :
+    210 * (2 * 2 ^ m) + 2 * 2 ^ m ≤
+      210 * (complexity interpretation (single (mcspSquare m)) +
+        2 * descriptionBitBound m + 1) + 17 * descriptionBitBound m :=
+  quad_reindexed_forest_size_ports (BitString.equivFin m).symm.toEmbedding
     (card_accepting_mcspSquare_le m) (fun a b qc qd => by
       change mcspSquare m (MCSP.truthTable m (quad a b qc qd)) = true
       exact mcspSquare_accepts_quad m hm a b qc qd)
@@ -1487,7 +1515,9 @@ theorem mcspSquare_32_quad_minority :
 #print axioms card_quad_const_mul_le
 #print axioms exists_reindexed_quad_forest_mask_witness
 #print axioms quad_reindexed_forest_size
+#print axioms quad_reindexed_forest_size_ports
 #print axioms mcspSquare_quad_super_twoN
+#print axioms mcspSquare_quad_super_twoN_ports
 #print axioms mcspSquare_32_quad_forest
 #print axioms mcspSquare_32_quad_minority
 

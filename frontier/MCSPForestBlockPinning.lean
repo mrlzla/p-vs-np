@@ -243,9 +243,9 @@ section BlockLowerBound
 
 variable {a d : ℕ}
 
-/-- Add the distinct original readers made redundant by one joint pin
-assignment, provided it preserves all the quadratic probes. -/
-theorem pin_losses_and_residual_with_count {m B : ℕ} (c : Circuit signature (2^m) 1)
+/-- A common sparse pinning preserves the quadratic probes and charges each
+removed original reader against the residual gate budget. -/
+theorem pin_losses_and_residual_probes_with_count {m B : ℕ} (c : Circuit signature (2^m) 1)
     (hc : c.Computes interpretation (single (mcspSquare m)))
     (hMin : c.size = complexity interpretation (single (mcspSquare m)))
     (hm : 1 ≤ m) (hFew : B < 2^m)
@@ -258,9 +258,8 @@ theorem pin_losses_and_residual_with_count {m B : ℕ} (c : Circuit signature (2
       let f : BooleanFunction (2^m) := fun y => mcspSquare m (substitute (pinAt x P) y)
       let removed := fresh c.program Sum.inl \ fresh c.program (pinAt x P)
       Q.card ≤ 2*(J ∩ removed).card ∧
-      (280*(2*2^m) + 2*2^m ≤
-        280*(complexity interpretation (single f) + 2*B + 1) +
-          17*B) ∧
+      (acceptingTables f).card ≤ 2^B ∧
+      (∀ (u : BitString m) (v : Bool) (a b : BitString m), f (MCSP.truthTable m (quad u v a b)) = true) ∧
       complexity interpretation (single f) + removed.card ≤ c.size := by
   let root := c.outputs 0
   have h0 := mcspSquare_constant_table m hm false
@@ -276,7 +275,6 @@ theorem pin_losses_and_residual_with_count {m B : ℕ} (c : Circuit signature (2
       funext i
       simp only [MCSP.truthTable_apply, quad, affine, dot_zero_left, Bool.and_false, Bool.xor_false]
     rwa [hz] at h
-  have hForest := quad_reindexed_forest_size (BitString.equivFin m).symm.toEmbedding hSparse' hQ
   have hIdEq : restrictedWire c.program Sum.inl root = mcspSquare m :=
     restricted_circuit_eq c hc Sum.inl
   have hInit := fresh_complexity_le_of_nonconstant c.program Sum.inl root (by
@@ -303,9 +301,31 @@ theorem pin_losses_and_residual_with_count {m B : ℕ} (c : Circuit signature (2
   have hPart := Finset.card_sdiff_add_card_eq_card hSub
   have hSize : (fresh c.program Sum.inl).card ≤ c.size :=
     (Finset.card_le_univ _).trans_eq (Fintype.card_fin c.size)
-  exact ⟨x, hCount, hForest, by
+  exact ⟨x, hCount, hSparse', hQ, by
     change complexity interpretation (single f) + (fresh c.program Sum.inl \ fresh c.program (pinAt x P)).card ≤ c.size
     omega⟩
+
+/-- Add the original reader losses to the quadratic lower bound. -/
+theorem pin_losses_and_residual_with_count {m B : ℕ} (c : Circuit signature (2^m) 1)
+    (hc : c.Computes interpretation (single (mcspSquare m)))
+    (hMin : c.size = complexity interpretation (single (mcspSquare m)))
+    (hm : 1 ≤ m) (hFew : B < 2^m)
+    (hSparse : (acceptingTables (mcspSquare m)).card ≤ 2^B)
+    (P Q : Finset (Fin (2^m))) (J : Finset (Fin c.size)) (hQP : Q ⊆ P)
+    (hReader : ∀ i ∈ Q, ∃ j ∈ J, ∃ k, (c.program.lines j).wires k = .input i)
+    (hRepair : ∀ (x : BitString (2^m)) (a : BitString m) (v : Bool) (u w : BitString m),
+      mcspSquare m (substitute (pinAt x P) (MCSP.truthTable m (quad a v u w))) = true) :
+    ∃ (x : BitString (2^m)),
+      let f : BooleanFunction (2^m) := fun y => mcspSquare m (substitute (pinAt x P) y)
+      let removed := fresh c.program Sum.inl \ fresh c.program (pinAt x P)
+      Q.card ≤ 2*(J ∩ removed).card ∧
+      (280*(2*2^m) + 2*2^m ≤
+        280*(complexity interpretation (single f) + 2*B + 1) +
+          17*B) ∧
+      complexity interpretation (single f) + removed.card ≤ c.size := by
+  obtain ⟨x,hReaders,hSparse',hQuad,hBudget⟩ :=
+    pin_losses_and_residual_probes_with_count c hc hMin hm hFew hSparse P Q J hQP hReader hRepair
+  exact ⟨x,hReaders,quad_reindexed_forest_size (BitString.equivFin m).symm.toEmbedding hSparse' hQuad,hBudget⟩
 
 theorem pin_losses_and_residual_of_readers {m : ℕ} (c : Circuit signature (2^m) 1)
     (hc : c.Computes interpretation (single (mcspSquare m)))

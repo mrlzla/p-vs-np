@@ -127,10 +127,18 @@ theorem accepted_after_1024_pin (p : BitString 22) (x : BitString (2^32))
   change complexity interpretation (single (fun z => f z ^^ correction z)) ≤ _
   exact hCost.trans (by omega)
 
+/-- The port count and the exact factorial savings, before any block pins. -/
+theorem mcsp32_unpinned_floor_ports :
+    8630799706 ≤ complexity interpretation (single (mcspSquare 32)) := by
+  have h := quad_reindexed_forest_size_ports (BitString.equivFin 32).symm.toEmbedding
+    mcsp32_tight_sparsity (mcspSquare_accepts_quad 32 (by decide))
+  norm_num at h
+  omega
+
 /-- One covered block and minority choices preserve the full forest bound
 with the exact factorial reserve. The shared prefix buys 512 reader losses. -/
-theorem mcsp32_adjacent_block_floor :
-    8620574488 ≤ complexity interpretation (single (mcspSquare 32)) := by
+theorem mcsp32_adjacent_block_floor_ports :
+    8630800218 ≤ complexity interpretation (single (mcspSquare 32)) := by
   obtain ⟨c,hc,hMin⟩ := exists_computes_size_eq_complexity (I := interpretation) (f := single (mcspSquare 32))
   let p := c.program
   let root := c.outputs 0
@@ -150,10 +158,11 @@ theorem mcsp32_adjacent_block_floor :
   have hQ (x : BitString (2^32)) (a : BitString 32) (b : Bool) (u w : BitString 32) :
       mcspSquare 32 (substitute (pinAt x P) (MCSP.truthTable 32 (quad a b u w))) = true :=
     accepted_after_1024_pin q x _ (QuadraticPinning.complexity_quad_shared_le a b u w)
-  obtain ⟨x,hReaders,hForest,hBudget⟩ := pin_losses_and_residual_with_count c hc hMin
+  obtain ⟨x,hReaders,hSparse,hProbes,hBudget⟩ := pin_losses_and_residual_probes_with_count c hc hMin
     (by decide) (show 18903 < (2:ℕ)^32 by decide) mcsp32_tight_sparsity
     P P (readerGates p root) Finset.Subset.rfl
     (fun i hi => need_input_has_reader hc0 hc1 (hCover hi)) hQ
+  have hForest := quad_reindexed_forest_size_ports (BitString.equivFin 32).symm.toEmbedding hSparse hProbes
   have hPart := Finset.card_le_card (Finset.inter_subset_right
     (s₁ := readerGates p root) (s₂ := fresh c.program Sum.inl \ fresh c.program (pinAt x P)))
   rw [hP] at hReaders
@@ -161,7 +170,13 @@ theorem mcsp32_adjacent_block_floor :
   norm_num at hForest
   omega
 
+theorem mcsp32_adjacent_block_floor :
+    8620574488 ≤ complexity interpretation (single (mcspSquare 32)) :=
+  (by decide : 8620574488 ≤ 8630800218).trans mcsp32_adjacent_block_floor_ports
+
 #print axioms accepted_after_1024_pin
 #print axioms mcsp32_adjacent_block_floor
+#print axioms mcsp32_unpinned_floor_ports
+#print axioms mcsp32_adjacent_block_floor_ports
 
 end PvsNP.Frontier.AdjacentBlockRepair

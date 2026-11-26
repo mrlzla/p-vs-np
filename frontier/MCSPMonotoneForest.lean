@@ -249,6 +249,30 @@ noncomputable def StopGate (p : Program signature n g) (root : Wire n g) : Finse
 def CutNode (p : Program signature n g) (root : Wire n g) (k : Fin g) : Prop :=
   k ∈ StopGate p root ∨ EnteredByOtherBad p root k
 
+/-- Cut endpoints carrying the value requested by the indicated corner. -/
+noncomputable def cornerCutNodes (p : Program signature n g) (root : Wire n g) (b : Bool) :
+    Finset (Fin g) :=
+  Finset.univ.filter fun k => CutNode p root k ∧ cornerValue p b (.gate k) = b
+
+/-- These are the only cut endpoints that can be used with both corner values. -/
+noncomputable def dualCutNodes (p : Program signature n g) (root : Wire n g) : Finset (Fin g) :=
+  cornerCutNodes p root false ∩ cornerCutNodes p root true
+
+theorem cornerCutNodes_subset (p : Program signature n g) (root : Wire n g) (b : Bool) :
+    cornerCutNodes p root b ⊆ Finset.univ.filter (CutNode p root) :=
+  fun _ h => Finset.mem_filter.mpr ⟨Finset.mem_univ _, (Finset.mem_filter.mp h).2.1⟩
+
+theorem dualCutNodes_subset (p : Program signature n g) (root : Wire n g) :
+    dualCutNodes p root ⊆ Finset.univ.filter (CutNode p root) :=
+  Finset.inter_subset_left.trans (cornerCutNodes_subset p root false)
+
+theorem card_cornerCutNodes_add (p : Program signature n g) (root : Wire n g) :
+    (cornerCutNodes p root false).card + (cornerCutNodes p root true).card ≤
+      (Finset.univ.filter (CutNode p root)).card + (dualCutNodes p root).card := by
+  rw [← Finset.card_union_add_card_inter]
+  exact Nat.add_le_add_right (Finset.card_le_card
+    (Finset.union_subset (cornerCutNodes_subset p root false) (cornerCutNodes_subset p root true))) _
+
 /-- Input coordinates touched by `repeatStates` or `StopGate` wires. -/
 noncomputable def cutInputs (p : Program signature n g) (root : Wire n g) : Finset (Fin n) :=
   open scoped Classical in
@@ -505,6 +529,51 @@ theorem card_cutNode_add_badNot_le_tight (p : Program signature n g) (root : Wir
   have hU := (Finset.card_le_card hSub).trans (Finset.card_union_le ..)
   have hSG := card_stopGate_add_badNot_le_tight p root h0 h1
   have hEB := card_enteredByOtherBad_le_tight p root h0 h1
+  omega
+
+/-- A cut endpoint carrying both corner values is a dual anomaly, a repeat
+reader, a target of a bad gate, or a good dual reader of an anomaly. -/
+theorem card_dualCutNodes_le (p : Program signature n g) (root : Wire n g)
+    (h0 : cornerValue p false root = true) (h1 : cornerValue p true root = true) :
+    2 * (dualCutNodes p root).card ≤
+      12 * (badGates p root).card + 13 * shared p root := by
+  let repeatedReaders := Finset.univ.filter (HasRepeat p root)
+  let targets := Finset.univ.filter fun k : Fin g => (.gate k : Wire n g) ∈ badGatesTargets p root
+  let entered := Finset.univ.filter (EnteredByOtherBad p root)
+  have hSub : dualCutNodes p root ⊆ dualOtherBad p root ∪ repeatedReaders ∪ targets ∪ entered := by
+    intro k hk
+    obtain ⟨hf,ht⟩ := Finset.mem_inter.mp hk
+    obtain ⟨hc,hf⟩ := (Finset.mem_filter.mp hf).2
+    have ht := (Finset.mem_filter.mp ht).2.2
+    rcases hc with hStop | hE
+    · rcases Finset.mem_union.mp hStop with hCut | hT
+      · rcases Finset.mem_union.mp hCut with hOther | hR
+        · exact Finset.mem_union_left _ (Finset.mem_union_left _ (Finset.mem_union_left _
+            (Finset.mem_filter.mpr ⟨hOther,hf,ht⟩)))
+        · exact Finset.mem_union_left _ (Finset.mem_union_left _ (Finset.mem_union_right _ hR))
+      · exact Finset.mem_union_left _ (Finset.mem_union_right _ hT)
+    · exact Finset.mem_union_right _ (Finset.mem_filter.mpr ⟨Finset.mem_univ _,hE⟩)
+  have hTargets : targets.card ≤ (badGatesTargets p root).card := by
+    rw [← Finset.card_image_of_injective targets (f := (Wire.gate : Fin g → Wire n g))
+      (fun _ _ h => Wire.gate.inj h)]
+    exact Finset.card_le_card (by
+      rintro _ hw
+      obtain ⟨k,hk,rfl⟩ := Finset.mem_image.mp hw
+      exact (Finset.mem_filter.mp hk).2)
+  have hBound : (dualCutNodes p root).card ≤
+      (dualOtherBad p root).card + repeatedReaders.card + targets.card + entered.card := by
+    calc
+      _ ≤ (dualOtherBad p root ∪ repeatedReaders ∪ targets ∪ entered).card := Finset.card_le_card hSub
+      _ ≤ _ := by
+        have h1' := Finset.card_union_le (dualOtherBad p root ∪ repeatedReaders ∪ targets) entered
+        have h2' := Finset.card_union_le (dualOtherBad p root ∪ repeatedReaders) targets
+        have h3' := Finset.card_union_le (dualOtherBad p root) repeatedReaders
+        omega
+  have hDual := card_dualOtherBad_le_tight p root h0 h1
+  have hRepeat : repeatedReaders.card ≤ 2 * shared p root := card_hasRepeat_le p root
+  have hBadTargets := card_badGatesTargets_le p root
+  have hEntered : 2 * entered.card ≤ 4 * (badGates p root).card + 5 * shared p root :=
+    card_enteredByOtherBad_le_tight p root h0 h1
   omega
 
 theorem card_cutInputs_le_slack (p : Program signature n g) (root : Wire n g)
@@ -2014,7 +2083,19 @@ theorem card_altNeed0_compl_le_of_sparse {f : BooleanFunction n} {B : ℕ}
   simp only [Fintype.card_fun, Fintype.card_coe, Fintype.card_bool] at hCard
   exact (Nat.pow_le_pow_iff_right (by decide : 1 < (2 : ℕ))).mp hCard
 
-private theorem card_sHit1_le_cutNode {f : BooleanFunction n} {B : ℕ}
+private theorem dualSteps_endpoint_values {p : Program signature n g} {root : Wire n g}
+    (h0 : cornerValue p false root = true) (h1 : cornerValue p true root = true)
+    {d : ℕ} {k : Fin g} {w : Wire n g} (h : DualSteps p root d k w) :
+    cornerValue p false w = false ∧ cornerValue p true w = true := by
+  induction h with
+  | zero hk _ hw =>
+    obtain ⟨hf,ht⟩ := segEdge_req_dualChild h0 h1 hk
+    rw [hw] at hf ht
+    exact ⟨(needCorner_eq_cornerValue h0 (needCorner_child_of_reqCorner hf)).symm,
+      (needCorner_eq_cornerValue h1 (needCorner_child_of_reqCorner ht)).symm⟩
+  | succ _ _ _ _ ih => exact ih
+
+private theorem card_sHit1_le_dualCutNodes {f : BooleanFunction n} {B : ℕ}
     (c : Circuit signature n 1) (hc : c.Computes interpretation (single f))
     (hSparse : (acceptingTables f).card ≤ 2 ^ B)
     (hf0 : f (fun _ => false) = true) (hf1 : f (fun _ => true) = true) :
@@ -2022,7 +2103,7 @@ private theorem card_sHit1_le_cutNode {f : BooleanFunction n} {B : ℕ}
     let root := c.outputs 0
     let S := segTopOR p root \ PureH0Bad p root
     (S.filter fun t => AltNeed1 p root S (.gate t)).card ≤
-      B + (Finset.univ.filter (CutNode p root)).card := by
+      B + (dualCutNodes p root).card := by
   classical
   intro p root S
   have h0 : cornerValue p false root = true := (congrFun (hc (fun _ => false)) 0).trans hf0
@@ -2044,7 +2125,7 @@ private theorem card_sHit1_le_cutNode {f : BooleanFunction n} {B : ℕ}
     simp only [zFun]
     split_ifs
     rfl
-  let cutSet := Finset.univ.filter (CutNode p root)
+  let cutSet := dualCutNodes p root
   let dropped := Finset.univ \ altNeed1_inputs p root S
   let targ := dropped.image Wire.input ∪ cutSet.image Wire.gate
   have hMaps : ∀ t ∈ sHit, zFun t ∈ targ := by
@@ -2059,7 +2140,11 @@ private theorem card_sHit1_le_cutNode {f : BooleanFunction n} {B : ℕ}
       exact Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, fun hiAlt =>
         hNotAlt (hi ▸ (Finset.mem_filter.mp hiAlt).2)⟩
     · apply Finset.mem_union_right
-      exact Finset.mem_image.mpr ⟨c0, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hc0⟩, hEqc.symm⟩
+      obtain ⟨hf,ht⟩ := dualSteps_endpoint_values h0 h1 hds
+      rw [hEqc] at hf ht
+      exact Finset.mem_image.mpr ⟨c0, Finset.mem_inter.mpr
+        ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _,hc0,hf⟩,
+          Finset.mem_filter.mpr ⟨Finset.mem_univ _,hc0,ht⟩⟩, hEqc.symm⟩
   have hInj : Set.InjOn zFun sHit := by
     intro t1 ht1 t2 ht2 hEq
     have hEq' : zOf t1 ht1 = zOf t2 ht2 := by
@@ -2093,10 +2178,10 @@ theorem card_sHit1_le {f : BooleanFunction n} {B : ℕ}
   intro p root _
   have h0 : cornerValue p false root = true := (congrFun (hc (fun _ => false)) 0).trans hf0
   have h1 : cornerValue p true root = true := (congrFun (hc (fun _ => true)) 0).trans hf1
-  exact (card_sHit1_le_cutNode c hc hSparse hf0 hf1).trans
-    (add_le_add le_rfl (card_cutNode_le_slack p root h0 h1))
+  exact (card_sHit1_le_dualCutNodes c hc hSparse hf0 hf1).trans (add_le_add le_rfl
+    ((Finset.card_le_card (dualCutNodes_subset p root)).trans (card_cutNode_le_slack p root h0 h1)))
 
-private theorem card_sHit0_le_cutNode {f : BooleanFunction n} {B : ℕ}
+private theorem card_sHit0_le_dualCutNodes {f : BooleanFunction n} {B : ℕ}
     (c : Circuit signature n 1) (hc : c.Computes interpretation (single f))
     (hSparse : (acceptingTables f).card ≤ 2 ^ B)
     (hf0 : f (fun _ => false) = true) (hf1 : f (fun _ => true) = true) :
@@ -2104,7 +2189,7 @@ private theorem card_sHit0_le_cutNode {f : BooleanFunction n} {B : ℕ}
     let root := c.outputs 0
     let S := segTopAND p root \ PureH1Bad p root
     (S.filter fun t => AltNeed0 p root S (.gate t)).card ≤
-      B + (Finset.univ.filter (CutNode p root)).card := by
+      B + (dualCutNodes p root).card := by
   classical
   intro p root S
   have h0 : cornerValue p false root = true := (congrFun (hc (fun _ => false)) 0).trans hf0
@@ -2126,7 +2211,7 @@ private theorem card_sHit0_le_cutNode {f : BooleanFunction n} {B : ℕ}
     simp only [zFun]
     split_ifs
     rfl
-  let cutSet := Finset.univ.filter (CutNode p root)
+  let cutSet := dualCutNodes p root
   let dropped := Finset.univ \ altNeed0_inputs p root S
   let targ := dropped.image Wire.input ∪ cutSet.image Wire.gate
   have hMaps : ∀ t ∈ sHit, zFun t ∈ targ := by
@@ -2141,7 +2226,11 @@ private theorem card_sHit0_le_cutNode {f : BooleanFunction n} {B : ℕ}
       exact Finset.mem_sdiff.mpr ⟨Finset.mem_univ _, fun hiAlt =>
         hNotAlt (hi ▸ (Finset.mem_filter.mp hiAlt).2)⟩
     · apply Finset.mem_union_right
-      exact Finset.mem_image.mpr ⟨c0, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hc0⟩, hEqc.symm⟩
+      obtain ⟨hf,ht⟩ := dualSteps_endpoint_values h0 h1 hds
+      rw [hEqc] at hf ht
+      exact Finset.mem_image.mpr ⟨c0, Finset.mem_inter.mpr
+        ⟨Finset.mem_filter.mpr ⟨Finset.mem_univ _,hc0,hf⟩,
+          Finset.mem_filter.mpr ⟨Finset.mem_univ _,hc0,ht⟩⟩, hEqc.symm⟩
   have hInj : Set.InjOn zFun sHit := by
     intro t1 ht1 t2 ht2 hEq
     have hEq' : zOf t1 ht1 = zOf t2 ht2 := by
@@ -2175,8 +2264,8 @@ theorem card_sHit0_le {f : BooleanFunction n} {B : ℕ}
   intro p root _
   have h0 : cornerValue p false root = true := (congrFun (hc (fun _ => false)) 0).trans hf0
   have h1 : cornerValue p true root = true := (congrFun (hc (fun _ => true)) 0).trans hf1
-  exact (card_sHit0_le_cutNode c hc hSparse hf0 hf1).trans
-    (add_le_add le_rfl (card_cutNode_le_slack p root h0 h1))
+  exact (card_sHit0_le_dualCutNodes c hc hSparse hf0 hf1).trans (add_le_add le_rfl
+    ((Finset.card_le_card (dualCutNodes_subset p root)).trans (card_cutNode_le_slack p root h0 h1)))
 
 /-! ### Part 2: `Dropped1`/`0`, leaf bounds, `segTopOR`/`segTopAND`, and monotone OR/AND forest -/
 
@@ -2354,13 +2443,13 @@ private noncomputable def altEntry0 (p : Program signature n g) (root : Wire n g
 private noncomputable def subtreeLeaves1 (p : Program signature n g) (root : Wire n g) :
     Finset (Wire n g) :=
   (Dropped1 p root).image Wire.input ∪
-    (Finset.univ.filter (CutNode p root)).image Wire.gate ∪
+    (cornerCutNodes p root true).image Wire.gate ∪
     altEntry1 p root
 
 private noncomputable def subtreeLeaves0 (p : Program signature n g) (root : Wire n g) :
     Finset (Wire n g) :=
   (Dropped0 p root).image Wire.input ∪
-    (Finset.univ.filter (CutNode p root)).image Wire.gate ∪
+    (cornerCutNodes p root false).image Wire.gate ∪
     altEntry0 p root
 
 private theorem selectedPins_card_le_one_of_op (op : Op) (v : Fin (signature.Arity op) → Bool)
@@ -2978,7 +3067,8 @@ private theorem card_segTopOR_exact {f : BooleanFunction n} {B : ℕ}
     (hf0 : f (fun _ => false) = true) (hf1 : f (fun _ => true) = true) :
     (segTopOR c.program (c.outputs 0)).card ≤
       (PureH0Bad c.program (c.outputs 0)).card + 3 * B +
-        3 * (Finset.univ.filter (CutNode c.program (c.outputs 0))).card +
+        2 * (cornerCutNodes c.program (c.outputs 0) true).card +
+        (dualCutNodes c.program (c.outputs 0)).card +
         2 * (badNot c.program (c.outputs 0)).card := by
   classical
   let p := c.program
@@ -3083,7 +3173,8 @@ private theorem card_segTopOR_exact {f : BooleanFunction n} {B : ℕ}
       · apply Finset.mem_union_right
         apply Finset.mem_union_left
         apply Finset.mem_union_right
-        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC⟩, rfl⟩
+        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC,
+          (needCorner_eq_cornerValue h1 hwN).symm⟩, rfl⟩
       · by_cases hjAlt : AltNeed1 p root S1 (.gate j)
         · apply Finset.mem_union_right
           apply Finset.mem_union_right
@@ -3128,7 +3219,8 @@ private theorem card_segTopOR_exact {f : BooleanFunction n} {B : ℕ}
       · apply Finset.mem_union_right
         apply Finset.mem_union_left
         apply Finset.mem_union_right
-        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC⟩, rfl⟩
+        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC,
+          (needCorner_eq_cornerValue h1 (hChild ▸ hwN)).symm⟩, rfl⟩
       · have hjClean : CleanNode1 p root j :=
           ⟨hChild ▸ hwN, fun hjAlt => hNotAlt (hChild ▸ hjAlt), hjC⟩
         have hjNb := (cleanNode1_props h0 h1 hjClean).1.1
@@ -3230,7 +3322,8 @@ private theorem card_segTopOR_exact {f : BooleanFunction n} {B : ℕ}
       · apply Finset.mem_union_right
         apply Finset.mem_union_left
         apply Finset.mem_union_right
-        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC⟩, rfl⟩
+        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC,
+          (needCorner_eq_cornerValue h1 (hChild ▸ hwN)).symm⟩, rfl⟩
       · by_cases hjAlt : AltNeed1 p root S1 (.gate j)
         · have hkClean := hNotCleanIfAlt (hChild ▸ hjAlt)
           apply Finset.mem_union_right
@@ -3283,7 +3376,7 @@ private theorem card_segTopOR_exact {f : BooleanFunction n} {B : ℕ}
         (Or.inl (Finset.mem_sdiff.mp ht1).1)
         (Or.inl (Finset.mem_sdiff.mp ht2).1)
         hAnc1 hAnc2
-  have hLeavesCard : leaves.card ≤ B + (Finset.univ.filter (CutNode p root)).card +
+  have hLeavesCard : leaves.card ≤ B + (cornerCutNodes p root true).card +
       sHit1.card + (badNot p root).card := by
     have hD1 : (Dropped1 p root).card ≤ B := by
       simpa [Dropped1, p, root] using
@@ -3291,18 +3384,18 @@ private theorem card_segTopOR_exact {f : BooleanFunction n} {B : ℕ}
           (fun t ht => by have hg := segTopOR_goodDual (Finset.mem_sdiff.mp ht).1; exact ⟨hg.1, hg.2.1.1⟩)
     have hAE := card_altEntry1_le_sHit c hc hf0 hf1
     let d1W : Finset (Wire n c.size) := (Dropped1 p root).image Wire.input
-    let cnW : Finset (Wire n c.size) := (Finset.univ.filter (CutNode p root)).image Wire.gate
+    let cnW : Finset (Wire n c.size) := (cornerCutNodes p root true).image Wire.gate
     have hU1 : leaves.card ≤ (d1W ∪ cnW).card + (altEntry1 p root).card :=
       Finset.card_union_le (d1W ∪ cnW) (altEntry1 p root)
     have hU2 : (d1W ∪ cnW).card ≤ d1W.card + cnW.card := Finset.card_union_le d1W cnW
     have hI1 : d1W.card ≤ (Dropped1 p root).card := Finset.card_image_le
-    have hI2 : cnW.card ≤ (Finset.univ.filter (CutNode p root)).card := Finset.card_image_le
+    have hI2 : cnW.card ≤ (cornerCutNodes p root true).card := Finset.card_image_le
     dsimp only [p, root, S1, sHit1] at hAE hU1 hI2 ⊢
     omega
   have hAUL : (A1.image Wire.gate ∪ leaves).card ≤ A1.card + leaves.card :=
     (Finset.card_union_le ..).trans (add_le_add Finset.card_image_le le_rfl)
-  have hHit : sHit1.card ≤ B + (Finset.univ.filter (CutNode p root)).card :=
-    card_sHit1_le_cutNode c hc hSparse hf0 hf1
+  have hHit : sHit1.card ≤ B + (dualCutNodes p root).card :=
+    card_sHit1_le_dualCutNodes c hc hSparse hf0 hf1
   have hSplitSeg : (segTopOR p root).card ≤ (PureH0Bad p root).card + S1.card := by
     have hSub : segTopOR p root ⊆ PureH0Bad p root ∪ S1 := fun k hk => by
       by_cases hP : k ∈ PureH0Bad p root
@@ -3324,9 +3417,11 @@ private theorem card_segTopOR_tight {f : BooleanFunction n} {B : ℕ}
   have hEx := card_segTopOR_exact c hc hSparse hf0 hf1
   have hPure := (card_pureH0Bad_le p root h0 h1).trans (card_cutGate_le_slack p root h0 h1)
   have hCut := card_cutNode_le_slack p root h0 h1
+  have hCorner := Finset.card_le_card (cornerCutNodes_subset p root true)
+  have hDual := Finset.card_le_card (dualCutNodes_subset p root)
   have hBadNot : (badNot p root).card ≤ slack p root :=
     (Finset.card_le_card (Finset.filter_subset _ _)).trans (card_badGates_le_slack p root)
-  dsimp only [p, root] at hEx hPure hCut hBadNot ⊢
+  dsimp only [p, root] at hEx hPure hCut hCorner hDual hBadNot ⊢
   omega
 
 theorem card_segTopOR_le {f : BooleanFunction n} {B : ℕ}
@@ -3342,7 +3437,8 @@ private theorem card_segTopAND_exact {f : BooleanFunction n} {B : ℕ}
     (hf0 : f (fun _ => false) = true) (hf1 : f (fun _ => true) = true) :
     (segTopAND c.program (c.outputs 0)).card ≤
       (PureH1Bad c.program (c.outputs 0)).card + 3 * B +
-        3 * (Finset.univ.filter (CutNode c.program (c.outputs 0))).card +
+        2 * (cornerCutNodes c.program (c.outputs 0) false).card +
+        (dualCutNodes c.program (c.outputs 0)).card +
         2 * (badNot c.program (c.outputs 0)).card := by
   classical
   let p := c.program
@@ -3447,7 +3543,8 @@ private theorem card_segTopAND_exact {f : BooleanFunction n} {B : ℕ}
       · apply Finset.mem_union_right
         apply Finset.mem_union_left
         apply Finset.mem_union_right
-        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC⟩, rfl⟩
+        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC,
+          (needCorner_eq_cornerValue h0 hwN).symm⟩, rfl⟩
       · by_cases hjAlt : AltNeed0 p root S0 (.gate j)
         · apply Finset.mem_union_right
           apply Finset.mem_union_right
@@ -3492,7 +3589,8 @@ private theorem card_segTopAND_exact {f : BooleanFunction n} {B : ℕ}
       · apply Finset.mem_union_right
         apply Finset.mem_union_left
         apply Finset.mem_union_right
-        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC⟩, rfl⟩
+        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC,
+          (needCorner_eq_cornerValue h0 (hChild ▸ hwN)).symm⟩, rfl⟩
       · have hjClean : CleanNode0 p root j :=
           ⟨hChild ▸ hwN, fun hjAlt => hNotAlt (hChild ▸ hjAlt), hjC⟩
         have hjNb := (cleanNode0_props h0 h1 hjClean).1.1
@@ -3589,7 +3687,8 @@ private theorem card_segTopAND_exact {f : BooleanFunction n} {B : ℕ}
       · apply Finset.mem_union_right
         apply Finset.mem_union_left
         apply Finset.mem_union_right
-        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC⟩, rfl⟩
+        exact Finset.mem_image.mpr ⟨j, Finset.mem_filter.mpr ⟨Finset.mem_univ _, hjC,
+          (needCorner_eq_cornerValue h0 (hChild ▸ hwN)).symm⟩, rfl⟩
       · by_cases hjAlt : AltNeed0 p root S0 (.gate j)
         · have hkClean := hNotCleanIfAlt (hChild ▸ hjAlt)
           apply Finset.mem_union_right
@@ -3642,7 +3741,7 @@ private theorem card_segTopAND_exact {f : BooleanFunction n} {B : ℕ}
         (Or.inr (Finset.mem_sdiff.mp ht1).1)
         (Or.inr (Finset.mem_sdiff.mp ht2).1)
         hAnc1 hAnc2
-  have hLeavesCard : leaves.card ≤ B + (Finset.univ.filter (CutNode p root)).card +
+  have hLeavesCard : leaves.card ≤ B + (cornerCutNodes p root false).card +
       sHit0.card + (badNot p root).card := by
     have hD0 : (Dropped0 p root).card ≤ B := by
       simpa [Dropped0, p, root] using
@@ -3650,18 +3749,18 @@ private theorem card_segTopAND_exact {f : BooleanFunction n} {B : ℕ}
           (fun t ht => by have hg := segTopAND_goodDual (Finset.mem_sdiff.mp ht).1; exact ⟨hg.1, hg.2.1.1⟩)
     have hAE := card_altEntry0_le_sHit c hc hf0 hf1
     let d0W : Finset (Wire n c.size) := (Dropped0 p root).image Wire.input
-    let cnW : Finset (Wire n c.size) := (Finset.univ.filter (CutNode p root)).image Wire.gate
+    let cnW : Finset (Wire n c.size) := (cornerCutNodes p root false).image Wire.gate
     have hU1 : leaves.card ≤ (d0W ∪ cnW).card + (altEntry0 p root).card :=
       Finset.card_union_le (d0W ∪ cnW) (altEntry0 p root)
     have hU2 : (d0W ∪ cnW).card ≤ d0W.card + cnW.card := Finset.card_union_le d0W cnW
     have hI1 : d0W.card ≤ (Dropped0 p root).card := Finset.card_image_le
-    have hI2 : cnW.card ≤ (Finset.univ.filter (CutNode p root)).card := Finset.card_image_le
+    have hI2 : cnW.card ≤ (cornerCutNodes p root false).card := Finset.card_image_le
     dsimp only [p, root, S0, sHit0] at hAE hU1 hI2 ⊢
     omega
   have hAUL : (A0.image Wire.gate ∪ leaves).card ≤ A0.card + leaves.card :=
     (Finset.card_union_le ..).trans (add_le_add Finset.card_image_le le_rfl)
-  have hHit : sHit0.card ≤ B + (Finset.univ.filter (CutNode p root)).card :=
-    card_sHit0_le_cutNode c hc hSparse hf0 hf1
+  have hHit : sHit0.card ≤ B + (dualCutNodes p root).card :=
+    card_sHit0_le_dualCutNodes c hc hSparse hf0 hf1
   have hSplitSeg : (segTopAND p root).card ≤ (PureH1Bad p root).card + S0.card := by
     have hSub : segTopAND p root ⊆ PureH1Bad p root ∪ S0 := fun k hk => by
       by_cases hP : k ∈ PureH1Bad p root
@@ -3683,9 +3782,11 @@ private theorem card_segTopAND_tight {f : BooleanFunction n} {B : ℕ}
   have hEx := card_segTopAND_exact c hc hSparse hf0 hf1
   have hPure := (card_pureH1Bad_le p root h0 h1).trans (card_cutGate_le_slack p root h0 h1)
   have hCut := card_cutNode_le_slack p root h0 h1
+  have hCorner := Finset.card_le_card (cornerCutNodes_subset p root false)
+  have hDual := Finset.card_le_card (dualCutNodes_subset p root)
   have hBadNot : (badNot p root).card ≤ slack p root :=
     (Finset.card_le_card (Finset.filter_subset _ _)).trans (card_badGates_le_slack p root)
-  dsimp only [p, root] at hEx hPure hCut hBadNot ⊢
+  dsimp only [p, root] at hEx hPure hCut hCorner hDual hBadNot ⊢
   omega
 
 theorem card_segTopAND_le {f : BooleanFunction n} {B : ℕ}
@@ -3726,15 +3827,33 @@ theorem stopInputs_subset_cutInputs (p : Program signature n g) (root : Wire n g
   obtain ⟨a, _, ha⟩ := Finset.mem_image.mp hw
   exact Finset.mem_filter.mpr ⟨Finset.mem_univ _, Or.inr (Or.inr ⟨k, hk, a, ha⟩)⟩
 
+/-- Actual argument ports of stop gates, indexed by gate and argument. -/
+noncomputable def stopPorts (p : Program signature n g) (root : Wire n g) :
+    Finset (Σ k : Fin g, Fin (signature.Arity (p.lines k).op)) :=
+  (StopGate p root).sigma fun _ => Finset.univ
+
+theorem stopTargets_eq_image_ports (p : Program signature n g) (root : Wire n g) :
+    stopTargets p root = (stopPorts p root).image (fun a => (p.lines a.1).wires a.2) := by
+  ext w
+  constructor
+  · intro hw
+    obtain ⟨k,hk,hw⟩ := Finset.mem_biUnion.mp hw
+    obtain ⟨a,ha,he⟩ := Finset.mem_image.mp hw
+    exact Finset.mem_image.mpr ⟨⟨k,a⟩, Finset.mem_sigma.mpr ⟨hk,ha⟩, he⟩
+  · intro hw
+    obtain ⟨⟨k,a⟩,ha,he⟩ := Finset.mem_image.mp hw
+    obtain ⟨hk,ha⟩ := Finset.mem_sigma.mp ha
+    exact Finset.mem_biUnion.mpr ⟨k,hk,Finset.mem_image.mpr ⟨a,ha,he⟩⟩
+
 theorem card_stopTargets_le_twice_stopGate (p : Program signature n g) (root : Wire n g) :
     (stopTargets p root).card ≤ 2 * (StopGate p root).card := by
-  have h1' : (stopTargets p root).card ≤
-      ∑ k ∈ StopGate p root, (Finset.univ.image (p.lines k).wires).card := Finset.card_biUnion_le
-  have h2' : ∑ k ∈ StopGate p root, (Finset.univ.image (p.lines k).wires).card ≤
-      ∑ _k ∈ StopGate p root, 2 := Finset.sum_le_sum fun k _ => op_card_wires_le _ _
-  have h3' : ∑ _k ∈ StopGate p root, 2 = 2 * (StopGate p root).card := by
-    simp [Finset.sum_const, smul_eq_mul, mul_comm]
-  omega
+  rw [stopTargets_eq_image_ports]
+  refine Finset.card_image_le.trans ?_
+  rw [stopPorts,Finset.card_sigma]
+  calc
+    _ ≤ ∑ _k ∈ StopGate p root, 2 := Finset.sum_le_sum fun k _ => by
+      simpa using (Program.fanInAtMost_iff.mp p.fanInAtMost_two k)
+    _ = _ := by simp [Nat.mul_comm]
 
 theorem card_stopTargets_le (p : Program signature n g) (root : Wire n g)
     (h0 : cornerValue p false root = true) (h1 : cornerValue p true root = true) :
@@ -3784,7 +3903,7 @@ private theorem root_budgets {f : BooleanFunction n} {B : ℕ}
       10 * B + 1326 * slack c.program (c.outputs 0) + 2 * (StopGate c.program (c.outputs 0)).card) ∧
     ((stopInputs c.program (c.outputs 0)).card +
         (ORRoot c.program (c.outputs 0)).card + (ANDRoot c.program (c.outputs 0)).card ≤
-      6 * B + 112 * slack c.program (c.outputs 0)) := by
+      6 * B + 84 * slack c.program (c.outputs 0)) := by
   let p := c.program
   let root := c.outputs 0
   have h0 : cornerValue p false root = true := (congrFun (hc (fun _ => false)) 0).trans hf0
@@ -3863,11 +3982,13 @@ private theorem root_budgets {f : BooleanFunction n} {B : ℕ}
   have hPureBoth := card_pureH0Bad_add_pureH1Bad_le_tight p root h0 h1
   have hCutBoth := card_cutNode_add_badNot_le_tight p root h0 h1
   have hEBTight := card_enteredByOtherBad_le_tight p root h0 h1
+  have hDualCut := card_dualCutNodes_le p root h0 h1
+  have hCornerCut := card_cornerCutNodes_add p root
   have hSGTight := card_stopGate_add_badNot_le_tight p root h0 h1
   have hBadUnused := card_badGates_le p root
   have hBadAddSh : (badGates p root).card + shared p root ≤ slack p root := by
     unfold slack; omega
-  dsimp only [p, root] at hORU hANDU hSumE_card hSumE hJoint hStop hStopSlack hExOR hExAND hPureBoth hCutBoth hEBTight hSGTight hBadAddSh
+  dsimp only [p, root] at hORU hANDU hSumE_card hSumE hJoint hStop hStopSlack hExOR hExAND hPureBoth hCutBoth hEBTight hDualCut hCornerCut hSGTight hBadAddSh
   exact ⟨by omega, by omega, by omega⟩
 
 theorem card_orRoot_add_andRoot_le {f : BooleanFunction n} {B : ℕ}
@@ -3888,8 +4009,18 @@ theorem card_stopInputs_and_roots_le {f : BooleanFunction n} {B : ℕ}
       10 * B + 1326 * slack c.program (c.outputs 0) + 2 * (StopGate c.program (c.outputs 0)).card :=
   (root_budgets c hc hSparse hf0 hf1).2.1
 
-/-- Tight combined budget on raw stop inputs and clean monotone forest roots:
-`stopInputs + ORRoot + ANDRoot ≤ 6 * B + 112 * slack`. -/
+/-- The forest boundary pays for each physical port once. Across corner
+certificates only endpoints carrying both corner values need both allowances. -/
+theorem card_stopInputs_and_roots_le_ports {f : BooleanFunction n} {B : ℕ}
+    (c : Circuit signature n 1) (hc : c.Computes interpretation (single f))
+    (hSparse : (acceptingTables f).card ≤ 2 ^ B)
+    (hf0 : f (fun _ => false) = true) (hf1 : f (fun _ => true) = true) :
+    (stopInputs c.program (c.outputs 0)).card +
+        (ORRoot c.program (c.outputs 0)).card + (ANDRoot c.program (c.outputs 0)).card ≤
+      6 * B + 84 * slack c.program (c.outputs 0) :=
+  (root_budgets c hc hSparse hf0 hf1).2.2
+
+/-- The combined forest boundary budget with its original coefficient. -/
 theorem card_stopInputs_and_roots_le_tight {f : BooleanFunction n} {B : ℕ}
     (c : Circuit signature n 1) (hc : c.Computes interpretation (single f))
     (hSparse : (acceptingTables f).card ≤ 2 ^ B)
@@ -3897,7 +4028,7 @@ theorem card_stopInputs_and_roots_le_tight {f : BooleanFunction n} {B : ℕ}
     (stopInputs c.program (c.outputs 0)).card +
         (ORRoot c.program (c.outputs 0)).card + (ANDRoot c.program (c.outputs 0)).card ≤
       6 * B + 112 * slack c.program (c.outputs 0) :=
-  (root_budgets c hc hSparse hf0 hf1).2.2
+  (card_stopInputs_and_roots_le_ports c hc hSparse hf0 hf1).trans (by omega)
 
 /-- Gate membership inside the clean monotone `.or` tree rooted at `r`. -/
 inductive ORMember (p : Program signature n g) (root : Wire n g) (r : Fin g) : Fin g → Prop where
@@ -5086,6 +5217,9 @@ theorem clean_case2_structure {f : BooleanFunction n} {B : ℕ}
 
 end PvsNP.Frontier.MonotoneForest
 
+#print axioms PvsNP.Frontier.MonotoneForest.stopTargets_eq_image_ports
+#print axioms PvsNP.Frontier.MonotoneForest.card_dualCutNodes_le
+#print axioms PvsNP.Frontier.MonotoneForest.card_stopInputs_and_roots_le_ports
 #print axioms PvsNP.Frontier.MonotoneForest.card_segTopOR_le
 #print axioms PvsNP.Frontier.MonotoneForest.card_segTopAND_le
 #print axioms PvsNP.Frontier.MonotoneForest.card_orRoot_add_andRoot_le

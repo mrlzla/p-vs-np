@@ -297,7 +297,7 @@ set_option maxRecDepth 1800 in
 sparse repair with a zero sampled forest span. On the same restriction the
 full trace rank still obeys the original sparsity lower bound. -/
 theorem mcsp32_actual_forest_witness_slice (c : Circuit signature (2^32) 1)
-    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8620584488) :
+    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8630810218) :
     ∃ (q : BitString 22) (x : BitString (2^32)) (R : Finset (Fin c.size)),
       let P := block (d := 10) q
       let pin := pinAt x P
@@ -532,7 +532,7 @@ private theorem paid_rank_partition {I : Type*} [Fintype I] {n g : ℕ}
 /-- Keep both the absorbed roots and the shared raw-fed trace space in the
 actual forest budget. The remaining gates are each charged at most once. -/
 theorem mcsp32_actual_forest_quadratic_budget (c : Circuit signature (2^32) 1)
-    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8620584488) :
+    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8630810218) :
     ∃ (q : BitString 22) (x : BitString (2^32)) (absorbed : Finset (Fin c.size)),
       let pin := pinAt x (block (d := 10) q)
       let base := substitute pin (fun _ => true)

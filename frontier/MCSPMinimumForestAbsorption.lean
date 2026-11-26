@@ -18,8 +18,8 @@ open scoped Classical BigOperators
 
 private theorem grounded_roots_near_floor (c : Circuit signature (2^32) 1)
     (hc : c.Computes interpretation (single (mcspSquare 32)))
-    (hSize : c.size ≤ 8620584488) :
-    3431248956 ≤ (groundedOrRoots c.program (c.outputs 0)).card +
+    (hSize : c.size ≤ 8630810218) :
+    3432426412 ≤ (groundedOrRoots c.program (c.outputs 0)).card +
       (groundedAndRoots c.program (c.outputs 0)).card := by
   let p := c.program
   let root := c.outputs 0
@@ -37,7 +37,7 @@ private theorem grounded_roots_near_floor (c : Circuit signature (2^32) 1)
     exact (congrFun (hc y) 0).symm.trans (he.trans ((congrFun (hc x) 0).trans hx))
   have hMasked := card_masked_le mcsp32_tight_sparsity x _ hAccept
   have hUnion := Finset.card_union_le P (stopInputs p root)
-  have hBudget := card_stopInputs_and_roots_le_tight c hc mcsp32_tight_sparsity h0 h1
+  have hBudget := card_stopInputs_and_roots_le_ports c hc mcsp32_tight_sparsity h0 h1
   have hN0 := card_needInputs_ge_of_sparse c hc mcsp32_tight_sparsity false h0
   have hN1 := card_needInputs_ge_of_sparse c hc mcsp32_tight_sparsity true h1
   have hAcct := needInputs_add_slack_eq p root hc0 hc1
@@ -104,10 +104,10 @@ private theorem leavesFor_sound {n g : ℕ} (p : Program signature n g) (root : 
   · exact andInputs_sound hi y hy
   · exact orInputs_sound hi y hy
 
-/-- In an exact circuit within 10,000 gates of the previous floor, one fully covered repairable block
+/-- In an exact circuit within 10,000 gates of the direct-reader bound, one fully covered repairable block
 has up to 400 distinct seeds for distinct original clean roots, all of the same polarity. -/
 theorem covered_absorbing_roots (c : Circuit signature (2^32) 1)
-    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8620584488)
+    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8630810218)
     (t : ℕ) (ht : t ≤ 400) :
     ∃ (q : BitString 22) (Q : Finset (Fin (2^32))) (gate : Q ↪ Fin c.size) (b : Bool),
       Q.card = t ∧ Q ⊆ block (d := 10) q ∧
@@ -121,14 +121,14 @@ theorem covered_absorbing_roots (c : Circuit signature (2^32) 1)
   have h1 := mcspSquare_constant_table 32 (by decide) true
   have hc0 : cornerValue p false root = true := (congrFun (hc _) 0).trans h0
   have hc1 : cornerValue p true root = true := (congrFun (hc _) 0).trans h1
-  have hRoots : 3431248956 ≤ (groundedOrRoots p root).card + (groundedAndRoots p root).card :=
+  have hRoots : 3432426412 ≤ (groundedOrRoots p root).card + (groundedAndRoots p root).card :=
     grounded_roots_near_floor c hc hSize
   let roots (b : Bool) := if b then groundedOrRoots p root else groundedAndRoots p root
   let leaves := leavesFor p root
-  obtain ⟨b,hb⟩ : ∃ b : Bool, 1715624478 ≤ (roots b).card := by
-    by_cases h : 1715624478 ≤ (groundedOrRoots p root).card
+  obtain ⟨b,hb⟩ : ∃ b : Bool, 1716213206 ≤ (roots b).card := by
+    by_cases h : 1716213206 ≤ (groundedOrRoots p root).card
     · exact ⟨true,h⟩
-    · exact ⟨false, by change 1715624478 ≤ (groundedAndRoots p root).card; omega⟩
+    · exact ⟨false, by change 1716213206 ≤ (groundedAndRoots p root).card; omega⟩
   have hNon (r : roots b) : ∃ i, i ∈ leaves b r := by
     have hr := r.property
     cases b
@@ -150,7 +150,7 @@ theorem covered_absorbing_roots (c : Circuit signature (2^32) 1)
       Finset.card_univ, Fintype.card_coe]
   have hNeed := card_needInputs_ge_of_sparse c hc mcsp32_tight_sparsity false h0
   have hDensity : 400 * 2^22 + 18903 * 2^10 < T.card :=
-    (by decide : 400 * 2^22 + 18903 * 2^10 < 1715624478).trans_le (hT.symm ▸ hb)
+    (by decide : 400 * 2^22 + 18903 * 2^10 < 1716213206).trans_le (hT.symm ▸ hb)
   obtain ⟨q, hCover, hDense⟩ := select_dense_covered_block (a := 22) (d := 10)
     T (needInputs p root false) (by decide) hDensity hNeed
   obtain ⟨Q, hQ, hCard⟩ := Finset.exists_subset_card_eq (ht.trans hDense)
@@ -259,7 +259,7 @@ set_option exponentiation.threshold 20000 in
 distinct original clean roots while retaining the quadratic probes and
 spending one bit in the sparsity bound. -/
 theorem mcsp32_actual_forest_absorption (c : Circuit signature (2^32) 1)
-    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8620584488) :
+    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8630810218) :
     ∃ (q : BitString 22) (x : BitString (2^32)) (R : Finset (Fin c.size)) (b : Bool),
       block (d := 10) q ⊆ needInputs c.program (c.outputs 0) false ∧
       (let pin := pinAt x (block (d := 10) q)
@@ -303,13 +303,13 @@ theorem mcsp32_actual_forest_absorption (c : Circuit signature (2^32) 1)
 
 set_option maxRecDepth 2500 in
 /-- Constant-reader losses and the restricted forest use disjoint original
-gate indices. Absorbing the clean roots adds 98 gates to the previous bound. -/
-theorem mcsp32_absorbing_block_floor :
-    8620574586 ≤ complexity interpretation (single (mcspSquare 32)) := by
+gate indices. Absorbing the clean roots adds 98 gates to the port-based block bound. -/
+theorem mcsp32_absorbing_block_floor_ports :
+    8630800316 ≤ complexity interpretation (single (mcspSquare 32)) := by
   obtain ⟨c,hc,hMin⟩ := exists_computes_size_eq_complexity
     (I := interpretation) (f := single (mcspSquare 32))
   rw [← hMin]
-  by_cases hSize : c.size ≤ 8620584488
+  by_cases hSize : c.size ≤ 8630810218
   swap
   · omega
   obtain ⟨q,x,R,b,hCover,hSparse,hCard,_,_,hAbs⟩ := mcsp32_actual_forest_absorption c hc hSize
@@ -340,7 +340,7 @@ theorem mcsp32_absorbing_block_floor :
       simp only [MCSP.truthTable_apply, quad, affine, dot_zero_left, Bool.and_false, Bool.xor_false]
     rwa [he] at h
   have hSparse' : (acceptingTables f).card ≤ 2^(18904 : ℕ) := hSparse
-  have hForest := quad_reindexed_forest_size (BitString.equivFin 32).symm.toEmbedding hSparse' hQ
+  have hForest := quad_reindexed_forest_size_ports (BitString.equivFin 32).symm.toEmbedding hSparse' hQ
   have hEq : restrictedWire p pin root = f := restricted_circuit_eq c hc pin
   have hRestNon : ¬ ∃ b, restrictedWire p pin root = fun _ => b := by
     rw [hEq]
@@ -354,10 +354,14 @@ theorem mcsp32_absorbing_block_floor :
   norm_num at hForest
   omega
 
+theorem mcsp32_absorbing_block_floor :
+    8620574586 ≤ complexity interpretation (single (mcspSquare 32)) :=
+  (by decide : 8620574586 ≤ 8630800316).trans mcsp32_absorbing_block_floor_ports
+
 /-- Counting up to 400 absorbed roots alone leaves too many named forest gates
 to obtain a positive lower bound on the quotient rank from this cap. -/
 theorem mcsp32_absorption_card_rank_gap (c : Circuit signature (2^32) 1)
-    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8620584488)
+    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8630810218)
     (R : Finset (Fin c.size)) (hR : R.card ≤ 400) :
     2^32 - (18904 + (cleanGates c.program (c.outputs 0) \ R).card + 1) = 0 := by
   let p := c.program
@@ -393,7 +397,7 @@ theorem mcsp32_absorption_card_rank_gap (c : Circuit signature (2^32) 1)
   have h1Size := card_needInputs_ge_of_sparse c hc mcsp32_tight_sparsity true h1
   have hSlack := needInputs_add_slack_eq p root hc0 hc1
   have hStop : stop.card ≤ 56 * slack p root := card_stopGate_le_56_slack p root hc0 hc1
-  have hMin := mcsp32_adjacent_block_floor.trans (complexity_le_of_computes c hc)
+  have hMin := mcsp32_adjacent_block_floor_ports.trans (complexity_le_of_computes c hc)
   dsimp only [p,root] at hSlack hStop
   change 4294967296 ≤ _ at h0Size h1Size
   change 4294967296 - (18904 + (forest \ R).card + 1) = 0
@@ -402,7 +406,7 @@ theorem mcsp32_absorption_card_rank_gap (c : Circuit signature (2^32) 1)
 /-- Apply the quotient-rank estimate to the actual absorbed roots and an
 accepted repaired probe. The cardinality estimate by itself adds zero. -/
 theorem mcsp32_absorbing_block_rank (c : Circuit signature (2^32) 1)
-    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8620584488) :
+    (hc : c.Computes interpretation (single (mcspSquare 32))) (hSize : c.size ≤ 8630810218) :
     ∃ (q : BitString 22) (x a : BitString (2^32)) (R : Finset (Fin c.size)),
       let p := c.program
       let out := c.outputs 0
@@ -436,6 +440,7 @@ theorem mcsp32_absorbing_block_rank (c : Circuit signature (2^32) 1)
 #print axioms covered_absorbing_roots
 #print axioms mcsp32_actual_forest_absorption
 #print axioms mcsp32_absorbing_block_floor
+#print axioms mcsp32_absorbing_block_floor_ports
 #print axioms mcsp32_absorbing_block_rank
 
 end PvsNP.Frontier.MinimumForestAbsorption
