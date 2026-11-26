@@ -12,5 +12,6 @@ public import PvsNP.CircuitCSPTradeoff
 public import PvsNP.SeparatorBarrier
 public import PvsNP.AffineButterflyBarrier
 public import PvsNP.ReachableSemanticBarrier
+public import PvsNP.AlgebraicDegreeBarrier
 public import PvsNP.Multiplexer
 public import PvsNP.Problem

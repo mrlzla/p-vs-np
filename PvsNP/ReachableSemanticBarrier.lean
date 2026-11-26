@@ -1625,7 +1625,7 @@ private lemma appendCompRow_directedEdge_of_bflyStep (d ℓ : Nat) (hℓ : ℓ <
           subst hvLast
           exact HybridCircuit.directedEdge_snoc_last ha
 
-private lemma buildCompBfly_directedEdge_of_bflyStep (d : Nat) :
+lemma buildCompBfly_directedEdge_of_bflyStep (d : Nat) :
     ∀ D (hD : D ≤ d) (u v : Fin (LayeredRing.ringWires (2 ^ d) D)),
       ButterflyNet.BflyStep d D u.val v.val → (buildCompBfly d D hD).DirectedEdge u v
   | 0, _, _, _, ⟨_, _, hℓ, _⟩ => by omega
@@ -1825,7 +1825,7 @@ private lemma appendCompRow_nonlinearCount (d ℓ : Nat) (hℓ : ℓ < d) (m : N
       rw [ih (Nat.le_of_lt hm), compGate_nonlinearWeight]
       omega
 
-private lemma buildCompBfly_nonlinearCount (d : Nat) :
+lemma buildCompBfly_nonlinearCount (d : Nat) :
     ∀ D (hD : D ≤ d), (buildCompBfly d D hD).nonlinearCount = D * 2 ^ d
   | 0, _ => by simp [buildCompBfly, HybridCircuit.nonlinearCount]
   | D + 1, hD => by
@@ -1993,7 +1993,7 @@ private lemma appendCompRow_evalWires_stable (d ℓ : Nat) (hℓ : ℓ < d)
       dsimp [appendCompRow]
       exact (HybridCircuit.evalWires_snoc_castSucc _ _ x _).trans (ih (Nat.le_of_lt hm))
 
-private lemma buildCompBfly_evalWires_stable (d : Nat) (x : Fin (2 ^ d) → Bool) :
+lemma buildCompBfly_evalWires_stable (d : Nat) (x : Fin (2 ^ d) → Bool) :
     ∀ D₁ D₂ (h₁₂ : D₁ ≤ D₂) (h₂ : D₂ ≤ d) (u : Fin (LayeredRing.ringWires (2 ^ d) D₁)),
       (buildCompBfly d D₂ h₂).evalWires x
           ⟨u.val, by
@@ -2094,7 +2094,7 @@ private lemma appendXorGates_evalWires_stable (d m : Nat) (hm : m ≤ 2 ^ d - 1)
       dsimp [appendXorGates]
       exact (HybridCircuit.evalWires_snoc_castSucc _ _ x _).trans (ih (Nat.le_of_lt hm))
 
-private lemma source_evalWire_comp (d ℓ j : Nat) (hℓ : ℓ ≤ d) (hj : j < 2 ^ d)
+lemma source_evalWire_comp (d ℓ j : Nat) (hℓ : ℓ ≤ d) (hj : j < 2 ^ d)
     (x : Fin (2 ^ d) → Bool) :
     (source d).circuit.evalWires x (compWireInSource d ℓ j hℓ hj) =
       (buildCompBfly d ℓ hℓ).evalWires x ⟨ℓ * 2 ^ d + j, by
@@ -2109,7 +2109,7 @@ private lemma source_evalWire_comp (d ℓ j : Nat) (hℓ : ℓ ≤ d) (hj : j < 
       omega⟩
   exact hX.trans hB
 
-private lemma buildCompBfly_eval_succ (d ℓ j : Nat) (hℓ : ℓ < d) (hj : j < 2 ^ d)
+lemma buildCompBfly_eval_succ (d ℓ j : Nat) (hℓ : ℓ < d) (hj : j < 2 ^ d)
     (x : Fin (2 ^ d) → Bool) :
     (buildCompBfly d (ℓ + 1) hℓ).evalWires x ⟨(ℓ + 1) * 2 ^ d + j, by
         rw [LayeredRing.ringWires_eq]; nlinarith⟩ =
@@ -2862,7 +2862,7 @@ private lemma appendXorGates_zmod2_frontier (d m : Nat) (hm : m ≤ 2 ^ d - 1)
       rw [← ih', hSplit]
       ring
 
-private lemma source_eval_zmod2 (d : Nat) (x : Fin (2 ^ d) → Bool) :
+lemma source_eval_zmod2 (d : Nat) (x : Fin (2 ^ d) → Bool) :
     boolToZMod2 ((source d).eval x) = ∑ j : Fin (2 ^ d), boolToZMod2 (x j) := by
   have hF := appendXorGates_zmod2_frontier d (2 ^ d - 1) le_rfl x
   have hPos : 1 ≤ 2 ^ d := Nat.two_pow_pos d
