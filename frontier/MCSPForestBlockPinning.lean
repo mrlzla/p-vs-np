@@ -171,7 +171,7 @@ section ReaderAccounting
 
 variable {n g : ℕ}
 
-private theorem exists_sparse_pins (f : BooleanFunction n) (P : Finset (Fin n)) :
+theorem exists_sparse_pins (f : BooleanFunction n) (P : Finset (Fin n)) :
     ∃ x : BitString n, (acceptingTables fun z => f (substitute (pinAt x P) z)).card ≤
       (acceptingTables f).card := by
   induction P using Finset.induction_on with
