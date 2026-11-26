@@ -233,7 +233,7 @@ private theorem comb_stage_trace (k : ℕ) (hk : k < n) (i : Fin n) (hi : 0 < i.
 
 /-- Append the existing recognizer to the comb and OR its answer with the
 all-one guard. The comb's original indices and wire functions stay visible. -/
-private theorem same_recognizer_with_comb {f : BooleanFunction n} (hn : 2 ≤ n)
+theorem same_recognizer_with_comb {f : BooleanFunction n} (hn : 2 ≤ n)
     (hYes : f (fun _ => true) = true) :
     ∃ (c : Circuit signature n 1) (gate : Fin n → Fin c.size),
       c.Computes interpretation (single f) ∧

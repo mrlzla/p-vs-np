@@ -421,8 +421,9 @@ end GuardControl
 section SignedAndControl
 
 set_option maxHeartbeats 800000 in
-theorem signedAnd_constant (r : ℕ) (hr : 10 ≤ r) (b : Bool) :
-    GrowingAndOrbit.control r hr (fun _ => b) = true := by
+theorem signedAnd_patched_constant (r : ℕ) (hr : 10 ≤ r) (b : Bool)
+    (D : Finset (Fin (2^JointOrbit.logArity r))) (hD : D.card ≤ 4) :
+    GrowingAndOrbit.control r hr (PatchedCut.patch D (fun _ => b)) = true := by
   let U : JointEquality.Labels r (2^r) := fun _ => (fun _ => b, false, QuadraticForest.zeroVec _)
   have hTag (v : Bool) : AffineProbes.taggedProbe (U v) = fun _ => b := by
     funext i
@@ -434,13 +435,21 @@ theorem signedAnd_constant (r : ℕ) (hr : 10 ≤ r) (b : Bool) :
     funext i
     simp [JointEquality.diagonal, JointEquality.joinBlocks, MCSP.truthTable_apply, hTag]
   obtain ⟨h,hh⟩ := JointEquality.log_stage r hr
-  have hTable : PatchedCut.patch ∅ (JointOrbit.rotated 0 (JointEquality.mixed h U U)) =
+  have hTable : JointOrbit.rotated 0 (JointEquality.mixed h U U) =
       (fun _ => b) := by
     rw [JointEquality.mixed_eq_splice, CommunicationCut.splice_self, hDiag]
     funext i
-    simp [PatchedCut.patch, JointOrbit.rotated]
+    rfl
   rw [← hTable]
-  exact (GrowingAndOrbit.control_original_tests r hr hh 0 U U ∅ (by simp)).mpr rfl
+  exact (GrowingAndOrbit.control_original_tests r hr hh 0 U U D hD).mpr rfl
+
+theorem signedAnd_constant (r : ℕ) (hr : 10 ≤ r) (b : Bool) :
+    GrowingAndOrbit.control r hr (fun _ => b) = true := by
+  have h := signedAnd_patched_constant r hr b ∅ (by simp)
+  have he : PatchedCut.patch ∅ (fun _ : Fin (2^JointOrbit.logArity r) => b) = fun _ => b := by
+    funext i
+    simp [PatchedCut.patch]
+  rwa [he] at h
 
 private theorem description_lt_half {m : ℕ} (hm : 1024 ≤ m) :
     descriptionBitBound m < 2^(m-1) := by

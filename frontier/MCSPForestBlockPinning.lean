@@ -245,10 +245,11 @@ variable {a d : ℕ}
 
 /-- Add the distinct original readers made redundant by one joint pin
 assignment, provided it preserves all the quadratic probes. -/
-theorem pin_losses_and_residual_of_readers {m : ℕ} (c : Circuit signature (2^m) 1)
+theorem pin_losses_and_residual_with_count {m B : ℕ} (c : Circuit signature (2^m) 1)
     (hc : c.Computes interpretation (single (mcspSquare m)))
     (hMin : c.size = complexity interpretation (single (mcspSquare m)))
-    (hm : 1 ≤ m) (hFew : descriptionBitBound m < 2^m)
+    (hm : 1 ≤ m) (hFew : B < 2^m)
+    (hSparse : (acceptingTables (mcspSquare m)).card ≤ 2^B)
     (P Q : Finset (Fin (2^m))) (J : Finset (Fin c.size)) (hQP : Q ⊆ P)
     (hReader : ∀ i ∈ Q, ∃ j ∈ J, ∃ k, (c.program.lines j).wires k = .input i)
     (hRepair : ∀ (x : BitString (2^m)) (a : BitString m) (v : Bool) (u w : BitString m),
@@ -258,15 +259,14 @@ theorem pin_losses_and_residual_of_readers {m : ℕ} (c : Circuit signature (2^m
       let removed := fresh c.program Sum.inl \ fresh c.program (pinAt x P)
       Q.card ≤ 2*(J ∩ removed).card ∧
       (280*(2*2^m) + 2*2^m ≤
-        280*(complexity interpretation (single f) + 2*descriptionBitBound m + 1) +
-          17*descriptionBitBound m) ∧
+        280*(complexity interpretation (single f) + 2*B + 1) +
+          17*B) ∧
       complexity interpretation (single f) + removed.card ≤ c.size := by
   let root := c.outputs 0
-  have hSparse := card_accepting_mcspSquare_le m
   have h0 := mcspSquare_constant_table m hm false
   obtain ⟨x, hx⟩ := exists_sparse_pins (mcspSquare m) P
   let f : BooleanFunction (2^m) := fun y => mcspSquare m (substitute (pinAt x P) y)
-  have hSparse' : (acceptingTables f).card ≤ 2^descriptionBitBound m := hx.trans hSparse
+  have hSparse' : (acceptingTables f).card ≤ 2^B := hx.trans hSparse
   have hQ (u : BitString m) (v : Bool) (c₁ c₂ : BitString m) :
       f (MCSP.truthTable m (quad u v c₁ c₂)) = true :=
     hRepair x u v c₁ c₂
@@ -306,6 +306,25 @@ theorem pin_losses_and_residual_of_readers {m : ℕ} (c : Circuit signature (2^m
   exact ⟨x, hCount, hForest, by
     change complexity interpretation (single f) + (fresh c.program Sum.inl \ fresh c.program (pinAt x P)).card ≤ c.size
     omega⟩
+
+theorem pin_losses_and_residual_of_readers {m : ℕ} (c : Circuit signature (2^m) 1)
+    (hc : c.Computes interpretation (single (mcspSquare m)))
+    (hMin : c.size = complexity interpretation (single (mcspSquare m)))
+    (hm : 1 ≤ m) (hFew : descriptionBitBound m < 2^m)
+    (P Q : Finset (Fin (2^m))) (J : Finset (Fin c.size)) (hQP : Q ⊆ P)
+    (hReader : ∀ i ∈ Q, ∃ j ∈ J, ∃ k, (c.program.lines j).wires k = .input i)
+    (hRepair : ∀ (x : BitString (2^m)) (a : BitString m) (v : Bool) (u w : BitString m),
+      mcspSquare m (substitute (pinAt x P) (MCSP.truthTable m (quad a v u w))) = true) :
+    ∃ (x : BitString (2^m)),
+      let f : BooleanFunction (2^m) := fun y => mcspSquare m (substitute (pinAt x P) y)
+      let removed := fresh c.program Sum.inl \ fresh c.program (pinAt x P)
+      Q.card ≤ 2*(J ∩ removed).card ∧
+      (280*(2*2^m) + 2*2^m ≤
+        280*(complexity interpretation (single f) + 2*descriptionBitBound m + 1) +
+          17*descriptionBitBound m) ∧
+      complexity interpretation (single f) + removed.card ≤ c.size :=
+  pin_losses_and_residual_with_count c hc hMin hm hFew (card_accepting_mcspSquare_le m)
+    P Q J hQP hReader hRepair
 
 /-- For a chosen block, charge the original readers of any covered subset
 and choose values that retain the residual acceptance-count bound. -/

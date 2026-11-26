@@ -104,7 +104,7 @@ open ShannonSynthesis (libraryAndData splitMinterms outputFormula)
 def lookupBankCost (k l : ℕ) : ℕ := 3*2^k + 3*2^l + 2^(2^k)*2^k
 
 /-- Every suffix lookup uses the same minterms and column-library gates. -/
-private theorem synth_suffix_lookups {I : Type} [Fintype I] {a k l : ℕ}
+theorem synth_suffix_lookups {I : Type} [Fintype I] {a k l : ℕ}
     (f : I → BooleanFunction (k+l)) :
     Synthesis interpretation (inputs (a+(k+l)))
       (Set.range fun i : I => fun z => f i (addressTail a z))

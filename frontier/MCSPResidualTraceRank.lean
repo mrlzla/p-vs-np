@@ -427,19 +427,14 @@ section BatchExtension
 
 variable {I J D : Type*} {n g : ℕ}
 
-private def restrictProfile (select : J → I) : (I → F₂) →ₗ[F₂] (J → F₂) where
+def restrictProfile (select : J → I) : (I → F₂) →ₗ[F₂] (J → F₂) where
   toFun f := f ∘ select
   map_add' _ _ := rfl
   map_smul' _ _ := rfl
 
-/-- Independent gate traces modulo raw inputs on a slice are independent in
-any larger batch containing that slice, with the same centering input. -/
-theorem independent_lifts_from_slice (p : Program signature n g) (base : BitString n)
-    (T : I → BitString n) (select : J → I) (pick : D → Fin g)
-    (h : LinearIndependent F₂ (fun i => (rawSpan base (T ∘ select)).mkQ
-      (centered p base (T ∘ select) (.gate (pick i))))) :
-    LinearIndependent F₂ (fun i => (rawSpan base T).mkQ
-      (centered p base T (.gate (pick i)))) := by
+noncomputable def restrictRawQuotient (base : BitString n) (T : I → BitString n)
+    (select : J → I) : ((I → F₂) ⧸ rawSpan base T) →ₗ[F₂]
+      ((J → F₂) ⧸ rawSpan base (T ∘ select)) := by
   let U := rawSpan base T
   let U' := rawSpan base (T ∘ select)
   let q := U'.mkQ.comp (restrictProfile select)
@@ -450,14 +445,27 @@ theorem independent_lifts_from_slice (p : Program signature n g) (base : BitStri
     apply LinearMap.mem_ker.mp
     rw [Submodule.ker_mkQ]
     exact Submodule.subset_span ⟨i,rfl⟩)
-  let L := U.liftQ q hRaw
-  apply LinearIndependent.of_comp L
-  have he : (L ∘ fun i => U.mkQ (centered p base T (.gate (pick i)))) =
-      fun i => U'.mkQ (centered p base (T ∘ select) (.gate (pick i))) := by
-    funext i
-    change U.liftQ q hRaw (Submodule.Quotient.mk (centered p base T (.gate (pick i)))) = _
-    rw [Submodule.liftQ_apply]
-    rfl
+  exact U.liftQ q hRaw
+
+theorem restrictRawQuotient_trace (p : Program signature n g) (base : BitString n)
+    (T : I → BitString n) (select : J → I) (w : Wire n g) :
+    restrictRawQuotient base T select ((rawSpan base T).mkQ (centered p base T w)) =
+      (rawSpan base (T ∘ select)).mkQ (centered p base (T ∘ select) w) := by
+  rfl
+
+/-- Independent gate traces modulo raw inputs on a slice are independent in
+any larger batch containing that slice, with the same centering input. -/
+theorem independent_lifts_from_slice (p : Program signature n g) (base : BitString n)
+    (T : I → BitString n) (select : J → I) (pick : D → Fin g)
+    (h : LinearIndependent F₂ (fun i => (rawSpan base (T ∘ select)).mkQ
+      (centered p base (T ∘ select) (.gate (pick i))))) :
+    LinearIndependent F₂ (fun i => (rawSpan base T).mkQ
+      (centered p base T (.gate (pick i)))) := by
+  apply LinearIndependent.of_comp (restrictRawQuotient base T select)
+  have he : (restrictRawQuotient base T select ∘
+      fun i => (rawSpan base T).mkQ (centered p base T (.gate (pick i)))) =
+      fun i => (rawSpan base (T ∘ select)).mkQ (centered p base (T ∘ select) (.gate (pick i))) :=
+    funext fun i => restrictRawQuotient_trace p base T select (.gate (pick i))
   rwa [he]
 
 end BatchExtension
