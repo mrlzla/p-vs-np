@@ -1194,16 +1194,23 @@ theorem card_quad_const_mul_le {m : ℕ} (U : Finset (BitString m)) (target : Bo
 
 /-! ### Quadratic forest averaging and improved `mcspSquare 32` lower bounds -/
 
-/-- Average over all rank-1 quadratic probes `quad a b0 c d` to find a forest mask with
-`4 * P.card ≤ 5 * (|ORRoot| + |ANDRoot|)` and zero linear `+ 2 * n` penalty. -/
-theorem exists_reindexed_quad_forest_mask_witness {n m : ℕ} {f : BooleanFunction n}
+/-- Clean disjunction roots with at least one raw leaf. -/
+noncomputable def groundedOrRoots {n g : ℕ} (p : Program signature n g) (root : Wire n g) :=
+  (ORRoot p root).filter fun r => (orInputs p root r).Nonempty
+
+/-- Clean conjunction roots with at least one raw leaf. -/
+noncomputable def groundedAndRoots {n g : ℕ} (p : Program signature n g) (root : Wire n g) :=
+  (ANDRoot p root).filter fun r => (andInputs p root r).Nonempty
+
+/-- A quadratic probe mask pays only for forest roots with raw leaves. -/
+theorem exists_reindexed_quad_forest_mask_grounded {n m : ℕ} {f : BooleanFunction n}
     (e : Fin n ↪ BitString m)
     (c : Circuit signature n 1) (hc : c.Computes interpretation (single f))
     (hQuad : ∀ (a : BitString m) (b0 : Bool) (qc qd : BitString m),
       f (fun i => quad a b0 qc qd (e i)) = true) :
     ∃ (x : BitString n) (P : Finset (Fin n)),
-      4 * P.card ≤ 5 * ((ORRoot c.program (c.outputs 0)).card +
-        (ANDRoot c.program (c.outputs 0)).card) ∧
+      4 * P.card ≤ 5 * ((groundedOrRoots c.program (c.outputs 0)).card +
+        (groundedAndRoots c.program (c.outputs 0)).card) ∧
       IsForestMask c.program (c.outputs 0) x P ∧ f x = true := by
   have hfCorner (b : Bool) : f (fun _ => b) = true := by
     have hEq : (fun i : Fin n => quad (zeroVec m) b (zeroVec m) (zeroVec m) (e i)) =
@@ -1215,8 +1222,8 @@ theorem exists_reindexed_quad_forest_mask_witness {n m : ℕ} {f : BooleanFuncti
   let root := c.outputs 0
   have h0 : cornerValue p false root = true := (congrFun (hc _) 0).trans (hfCorner false)
   have h1 : cornerValue p true root = true := (congrFun (hc _) 0).trans (hfCorner true)
-  let T_OR := ORRoot p root
-  let T_AND := ANDRoot p root
+  let T_OR := groundedOrRoots p root
+  let T_AND := groundedAndRoots p root
   let I_OR (r : Fin c.size) : Finset (Fin n) := orInputs p root r
   let I_AND (r' : Fin c.size) : Finset (Fin n) := andInputs p root r'
   let U_OR (r : Fin c.size) : Finset (BitString m) := (I_OR r).image e
@@ -1353,23 +1360,40 @@ theorem exists_reindexed_quad_forest_mask_witness {n m : ℕ} {f : BooleanFuncti
     · left
       let w := Classical.choose hEx
       have hw := Classical.choose_spec hEx
-      refine ⟨w, hw.1, Finset.mem_union_left _ (Finset.mem_biUnion.mpr ⟨r, hr, ?_⟩), hw.2⟩
+      refine ⟨w, hw.1, Finset.mem_union_left _ (Finset.mem_biUnion.mpr ⟨r, Finset.mem_filter.mpr ⟨hr, ⟨w, hw.1⟩⟩, ?_⟩), hw.2⟩
       simp [maskOR, hEx, w]
     · right
       intro i hi
-      exact Finset.mem_union_left _ (Finset.mem_biUnion.mpr ⟨r, hr, by
+      exact Finset.mem_union_left _ (Finset.mem_biUnion.mpr ⟨r, Finset.mem_filter.mpr ⟨hr, ⟨i, hi⟩⟩, by
         simpa [maskOR, hEx] using hi⟩)
   · intro r hr
     by_cases hEx : ∃ u ∈ I_AND r, x u = false
     · left
       let u := Classical.choose hEx
       have hu := Classical.choose_spec hEx
-      refine ⟨u, hu.1, Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨r, hr, ?_⟩), hu.2⟩
+      refine ⟨u, hu.1, Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨r, Finset.mem_filter.mpr ⟨hr, ⟨u, hu.1⟩⟩, ?_⟩), hu.2⟩
       simp [maskAND, hEx, u]
     · right
       intro i hi
-      exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨r, hr, by
+      exact Finset.mem_union_right _ (Finset.mem_biUnion.mpr ⟨r, Finset.mem_filter.mpr ⟨hr, ⟨i, hi⟩⟩, by
         simpa [maskAND, hEx] using hi⟩)
+
+/-- The quadratic mask bound with the full root count. -/
+theorem exists_reindexed_quad_forest_mask_witness {n m : ℕ} {f : BooleanFunction n}
+    (e : Fin n ↪ BitString m)
+    (c : Circuit signature n 1) (hc : c.Computes interpretation (single f))
+    (hQuad : ∀ (a : BitString m) (b0 : Bool) (qc qd : BitString m),
+      f (fun i => quad a b0 qc qd (e i)) = true) :
+    ∃ (x : BitString n) (P : Finset (Fin n)),
+      4 * P.card ≤ 5 * ((ORRoot c.program (c.outputs 0)).card +
+        (ANDRoot c.program (c.outputs 0)).card) ∧
+      IsForestMask c.program (c.outputs 0) x P ∧ f x = true := by
+  obtain ⟨x, P, hP, hMask, hx⟩ := exists_reindexed_quad_forest_mask_grounded e c hc hQuad
+  have hOR : (groundedOrRoots c.program (c.outputs 0)).card ≤ (ORRoot c.program (c.outputs 0)).card :=
+    Finset.card_filter_le _ _
+  have hAND : (groundedAndRoots c.program (c.outputs 0)).card ≤ (ANDRoot c.program (c.outputs 0)).card :=
+    Finset.card_filter_le _ _
+  exact ⟨x, P, by omega, hMask, hx⟩
 
 /-- Reindexed quadratic-probe forest lower bound with zero linear penalty:
 `280 * (2 * n) + 2 * n ≤ 280 * (complexity f + 2 * B + 1) + 17 * B`. -/

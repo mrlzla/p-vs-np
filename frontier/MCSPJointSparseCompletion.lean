@@ -20,13 +20,12 @@ section Completion
 
 variable {n : ℕ}
 
-/-- Extend prescribed pins using minority branches one coordinate at a time.
-The padded count only pays for the prescribed part. -/
-theorem exists_sparse_completion (f : BooleanFunction n) (P Q : Finset (Fin n))
+/-- Completing the pins by minority branches never increases the acceptance count. -/
+theorem exists_completion_le_prescribed (f : BooleanFunction n) (P Q : Finset (Fin n))
     (hSub : Q ⊆ P) (x : BitString n) :
     ∃ y : BitString n, (∀ i ∈ Q, y i = x i) ∧
       (acceptingTables fun z => f (substitute (pinAt y P) z)).card ≤
-        2^Q.card*(acceptingTables f).card := by
+        (acceptingTables fun z => f (substitute (pinAt x Q) z)).card := by
   let base (z : BitString n) := f (substitute (pinAt x Q) z)
   obtain ⟨w, hw⟩ := exists_sparse_pins base (P \ Q)
   let y : BitString n := fun i => if i ∈ Q then x i else w i
@@ -41,7 +40,102 @@ theorem exists_sparse_completion (f : BooleanFunction n) (P Q : Finset (Fin n))
     funext z
     simp only [base, ← substitute_compose, he]
   rw [heval] at hw
-  exact hw.trans (card_accepting_pin_le f x Q)
+  exact hw
+
+/-- The padded count only pays for the prescribed part. -/
+theorem exists_sparse_completion (f : BooleanFunction n) (P Q : Finset (Fin n))
+    (hSub : Q ⊆ P) (x : BitString n) :
+    ∃ y : BitString n, (∀ i ∈ Q, y i = x i) ∧
+      (acceptingTables fun z => f (substitute (pinAt y P) z)).card ≤
+        2^Q.card*(acceptingTables f).card := by
+  obtain ⟨y, hSeed, hy⟩ := exists_completion_le_prescribed f P Q hSub x
+  exact ⟨y, hSeed, hy.trans (card_accepting_pin_le f x Q)⟩
+
+/-- At least half of the seed assignments set at least half of the seeds to the
+controlling value. Some such assignment costs at most one bit in the sparsity bound. -/
+theorem exists_sparse_majority_completion (f : BooleanFunction n) (P Q : Finset (Fin n))
+    (hSub : Q ⊆ P) (b : Bool) :
+    ∃ x : BitString n, Q.card ≤ 2 * (Q.filter fun i => x i = b).card ∧
+      (acceptingTables fun z => f (substitute (pinAt x P) z)).card ≤
+        2 * (acceptingTables f).card := by
+  let extend (a : Q → Bool) (i : Fin n) : Bool := if h : i ∈ Q then a ⟨i,h⟩ else false
+  have hExtend (a : Q → Bool) (i : Q) : extend a i = a i := by simp [extend, i.property]
+  let win (a : Q → Bool) := (Q.filter fun i => extend a i = b).card
+  let good : Finset (Q → Bool) := Finset.univ.filter fun a => Q.card ≤ 2 * win a
+  let flip (a : Q → Bool) : Q → Bool := fun i => !(a i)
+  have hFlip (a : Q → Bool) : flip (flip a) = a := by funext i; simp [flip]
+  have hSplit (a : Q → Bool) : win (flip a) + win a = Q.card := by
+    have hPart := Finset.card_sdiff_add_card_eq_card (Finset.filter_subset (fun i => extend a i = b) Q)
+    have he : Q \ Q.filter (fun i => extend a i = b) = Q.filter (fun i => extend (flip a) i = b) := by
+      ext i
+      by_cases hi : i ∈ Q
+      · have h1 := hExtend a ⟨i,hi⟩
+        have h2 := hExtend (flip a) ⟨i,hi⟩
+        change extend a i = a ⟨i,hi⟩ at h1
+        change extend (flip a) i = !(a ⟨i,hi⟩) at h2
+        cases a ⟨i,hi⟩ <;> cases b <;> simp_all
+      · simp [hi]
+    rwa [he] at hPart
+  have hCover : (Finset.univ : Finset (Q → Bool)) ⊆ good ∪ good.image flip := by
+    intro a _
+    by_cases h : a ∈ good
+    · exact Finset.mem_union_left _ h
+    · have hn : ¬ Q.card ≤ 2 * win a := fun he => h (Finset.mem_filter.mpr ⟨Finset.mem_univ _,he⟩)
+      have hf := hSplit a
+      exact Finset.mem_union_right _ (Finset.mem_image.mpr
+        ⟨flip a, Finset.mem_filter.mpr ⟨Finset.mem_univ _, by omega⟩, hFlip a⟩)
+  have hGood : 2^Q.card ≤ 2*good.card := by
+    have h := Finset.card_le_card hCover
+    rw [Finset.card_univ,Fintype.card_fun,Fintype.card_bool,Fintype.card_coe] at h
+    have hu := Finset.card_union_le good (good.image flip)
+    have hi : (good.image flip).card ≤ good.card := Finset.card_image_le
+    omega
+  let A (a : Q → Bool) := acceptingTables fun z => f (substitute (pinAt (extend a) Q) z)
+  let pairs := good.sigma A
+  let target := (acceptingTables f) ×ˢ (Finset.univ : Finset (Q → Bool))
+  let record (t : pairs) : target := ⟨
+    (substitute (pinAt (extend t.val.1) Q) t.val.2, fun i => t.val.2 i),
+    Finset.mem_product.mpr ⟨Finset.mem_filter.mpr
+      ⟨Finset.mem_univ _, (Finset.mem_filter.mp (Finset.mem_sigma.mp t.property).2).2⟩,
+      Finset.mem_univ _⟩⟩
+  have hInj : Function.Injective record := by
+    intro u v h
+    have hFirst := congrArg (fun t : target => t.val.1) h
+    have hSecond := congrArg (fun t : target => t.val.2) h
+    change substitute (pinAt (extend u.val.1) Q) u.val.2 =
+      substitute (pinAt (extend v.val.1) Q) v.val.2 at hFirst
+    change (fun i : Q => u.val.2 i) = (fun i : Q => v.val.2 i) at hSecond
+    have ha : u.val.1 = v.val.1 := by
+      funext i
+      have he := congrFun hFirst i.val
+      simpa [substitute,pinAt,i.property,hExtend] using he
+    have hz : u.val.2 = v.val.2 := by
+      funext i
+      by_cases hi : i ∈ Q
+      · exact congrFun hSecond ⟨i,hi⟩
+      · have he := congrFun hFirst i
+        simpa [substitute,pinAt,hi] using he
+    exact Subtype.ext (Sigma.ext ha (heq_of_eq hz))
+  have hPairs : (∑ a ∈ good, (A a).card) ≤ (acceptingTables f).card * 2^Q.card := by
+    have h := Fintype.card_le_of_injective record hInj
+    rw [Fintype.card_coe, Fintype.card_coe] at h
+    dsimp only [pairs,target] at h
+    rwa [Finset.card_sigma,Finset.card_product,Finset.card_univ,Fintype.card_fun,
+      Fintype.card_bool,Fintype.card_coe] at h
+  have hNon : good.Nonempty := Finset.card_pos.mp (by have := Nat.two_pow_pos Q.card; omega)
+  obtain ⟨a, ha, hac⟩ : ∃ a ∈ good, (A a).card ≤ 2 * (acceptingTables f).card := by
+    by_contra! hn
+    have hLt : (∑ _a ∈ good, 2 * (acceptingTables f).card) < ∑ a ∈ good, (A a).card :=
+      Finset.sum_lt_sum_of_nonempty hNon hn
+    rw [Finset.sum_const, smul_eq_mul, ← Nat.mul_assoc] at hLt
+    have hLe := Nat.mul_le_mul_right (acceptingTables f).card hGood
+    rw [Nat.mul_comm (2^Q.card), Nat.mul_comm 2 good.card] at hLe
+    omega
+  obtain ⟨x, hx, hc⟩ := exists_completion_le_prescribed f P Q hSub (extend a)
+  have he : Q.filter (fun i => x i = b) = Q.filter (fun i => extend a i = b) := by
+    ext i
+    by_cases hi : i ∈ Q <;> simp [hi,hx]
+  exact ⟨x, he.symm ▸ (Finset.mem_filter.mp ha).2, hc.trans hac⟩
 
 end Completion
 
@@ -378,6 +472,7 @@ theorem mcsp32_eleven_joint_exits (c : Circuit signature (2^32) 1)
 end Arity32
 
 #print axioms exists_sparse_completion
+#print axioms exists_sparse_majority_completion
 #print axioms joint_seeded_exits
 #print axioms exact_mcsp_joint_sparse_exits
 #print axioms factorial_room_32_exact

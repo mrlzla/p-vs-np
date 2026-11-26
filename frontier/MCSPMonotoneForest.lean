@@ -4464,6 +4464,22 @@ private theorem andGate_mem_andMember {p : Program signature n g} {root : Wire n
         exact ⟨r, hrR, ANDMember.child hrMem hkAND hkR ⟨a, ha⟩⟩
       · exact (hPO.2.2 hp0N1).elim
 
+/-- Every non-stop gate belongs to a clean monotone component. -/
+theorem non_stop_mem_forest {p : Program signature n g} {root : Wire n g}
+    (h0 : cornerValue p false root = true) (h1 : cornerValue p true root = true)
+    {k : Fin g} (hk : k ∉ StopGate p root) :
+    (∃ r ∈ ORRoot p root, ORMember p root r k) ∨
+      (∃ r ∈ ANDRoot p root, ANDMember p root r k) := by
+  have hFlip := not_badFlip_of_not_cutGate (fun h => hk (cutGate_subset_stopGate _ _ h))
+  have hClass : ORGate p root k ∨ ANDGate p root k := by
+    rcases four_way_of_not_badFlip h0 h1 hFlip with hDA | hDO | hPA | hPO
+    · exact Or.inr ⟨hk, hDA.1, hDA.2.2⟩
+    · exact Or.inl ⟨hk, hDO.1, hDO.2.1⟩
+    · exact Or.inr ⟨hk, hPA.1, hPA.2.2⟩
+    · exact Or.inl ⟨hk, hPO.1, hPO.2.1⟩
+  exact hClass.imp (orGate_mem_orMember h0 h1 g k (by omega))
+    (andGate_mem_andMember h0 h1 g k (by omega))
+
 theorem need_input_in_stop_or_forest {p : Program signature n g} {root : Wire n g}
     (h0 : cornerValue p false root = true) (h1 : cornerValue p true root = true)
     {i : Fin n} (hi : i ∈ needInputs p root false) :
@@ -4476,18 +4492,9 @@ theorem need_input_in_stop_or_forest {p : Program signature n g} {root : Wire n 
   have ha : (p.lines k).wires a = .input i := congrArg Prod.fst he
   by_cases hk : k ∈ StopGate p root
   · exact Or.inl (stopInput_mem_of_wire hk a ha)
-  have hFlip := not_badFlip_of_not_cutGate (fun h => hk (cutGate_subset_stopGate _ _ h))
-  have hClass : ORGate p root k ∨ ANDGate p root k := by
-    rcases four_way_of_not_badFlip h0 h1 hFlip with hDA | hDO | hPA | hPO
-    · exact Or.inr ⟨hk, hDA.1, hDA.2.2⟩
-    · exact Or.inl ⟨hk, hDO.1, hDO.2.1⟩
-    · exact Or.inr ⟨hk, hPA.1, hPA.2.2⟩
-    · exact Or.inl ⟨hk, hPO.1, hPO.2.1⟩
-  rcases hClass with ho | hA
-  · obtain ⟨r, hr, hm⟩ := orGate_mem_orMember h0 h1 g k (by omega) ho
-    exact Or.inr (Or.inl ⟨r, hr, Finset.mem_filter.mpr ⟨Finset.mem_univ _, k, hm, a, ha⟩⟩)
-  · obtain ⟨r, hr, hm⟩ := andGate_mem_andMember h0 h1 g k (by omega) hA
-    exact Or.inr (Or.inr ⟨r, hr, Finset.mem_filter.mpr ⟨Finset.mem_univ _, k, hm, a, ha⟩⟩)
+  rcases non_stop_mem_forest h0 h1 hk with ⟨r, hr, hm⟩ | ⟨r, hr, hm⟩
+  · exact Or.inr (Or.inl ⟨r, hr, Finset.mem_filter.mpr ⟨Finset.mem_univ _, k, hm, a, ha⟩⟩)
+  · exact Or.inr (Or.inr ⟨r, hr, Finset.mem_filter.mpr ⟨Finset.mem_univ _, k, hm, a, ha⟩⟩)
 
 /-! #### Structured input coverage, perturbation invariance, and `clean_case2_structure` -/
 
